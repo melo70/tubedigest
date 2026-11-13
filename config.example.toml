@@ -1,0 +1,79 @@
+# ==============================================================================
+# TubeDigest - Configuration Template
+# ==============================================================================
+# This configuration file defines parameters, credentials, paths, and templates
+# used by the TubeDigest pipeline to monitor YouTube channels, generate AI-powered
+# summaries, and dispatch email digests.
+#
+# Copy this file to 'config.toml' and replace the placeholder values with your
+# actual configuration and credentials.
+#
+# VARIABLES OVERVIEW:
+#
+# [youtube]
+#   channel_id        : The 24-character YouTube Channel ID to monitor (e.g. "UC...").
+#   feed_url_template : Template URL for the YouTube RSS feed with {channel_id} placeholder.
+#
+# [email]
+#   sender            : Email address used to dispatch notifications.
+#   password          : Application-specific password (app password) for SMTP authentication.
+#   receiver          : Destination email address where summaries will be delivered.
+#   smtp_server       : Outgoing SMTP server hostname (e.g. "smtp.gmail.com").
+#   smtp_port         : Port number for SMTP submission (typically 587 for STARTTLS or 465 for SSL).
+#
+# [file]
+#   state_file        : Legacy setting for the state persistence file (kept for compatibility).
+#
+# [storage]
+#   last_id_file      : Path to the state file tracking the ID of the last processed video.
+#   logs_dir          : Directory where application execution logs are stored.
+#   transcripts_dir   : Directory where downloaded raw transcripts (.txt) are archived.
+#   log_file          : Name of the log file (inside logs_dir).
+#
+# [gemini]
+#   api_key           : Google Gemini API key used to authenticate with Google GenAI.
+#   model             : Gemini model identifier (e.g. "gemini-2.5-flash", "gemini-3.6-flash").
+#   prompt            : Multi-line prompt template for summarization.
+#                       Must include {video_title} and {transcript} placeholders.
+# ==============================================================================
+
+[youtube]
+channel_id = "YOUR_PREFERRED_YT_CHANNEL_ID"
+feed_url_template = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+
+[email]
+sender = "name.surname@porko.com"
+password = "app password"
+receiver = "name.surname@porko.com"
+smtp_server = "smtp.porko.com"
+smtp_port = 111
+
+[file]
+state_file = "last_video_id.txt"
+
+[storage]
+last_id_file = "last_video_id.txt"
+logs_dir = "logs"
+transcripts_dir = "transcripts"
+log_file = "tubedigest.log"
+
+[gemini]
+api_key = "YOUR_API_KEY"
+model = "NAME_OF_PORKO_MODEL"
+prompt = """
+Sei un assistente esperto nell'analisi di contenuti video. 
+Analizza la trascrizione del video di YouTube dal titolo "{video_title}" fornita di seguito.
+
+Genera un sunto approfondito e ben strutturato in lingua italiana, formattato rigorosamente in Markdownelegante e leggibile.
+Usa questa struttura:
+- Un titolo principale (`# {video_title}`)
+- Una sezione `## Panoramica Generale` (2-3 frasi chiare)
+- Una sezione `## Punti Chiave` (usa elenchi puntati con parole chiave in **grassetto**)
+- Una sezione `## Conclusioni e Riflessioni`
+
+Non aggiungere preamboli o commenti fuori dal Markdown.
+Trascrizione:
+{transcript}
+"""
+
+
