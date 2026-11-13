@@ -17,8 +17,8 @@ It continuously monitors multiple YouTube channels via RSS feeds, downloads new 
 * **Quota-Free Channel Tracking**: Monitors YouTube channels via standard RSS feeds—no complex YouTube Data API credentials or quota limits required.
 * **Automatic Transcript Extraction**: Pulls subtitle and caption tracks automatically using `youtube-transcript-api` (supporting language fallbacks).
 * **AI-Powered Summarization**: Generates insightful, structured summaries powered by Google's Gemini models (`gemini-2.5-flash`, `gemini-3.6-flash`, etc.).
-* **Externalized Prompt Templates**: Prompts are stored in clean template files (`prompts/default_summary.txt`), with optional channel-specific custom prompts.
-* **Built-in SQLite Storage**: Saves channel authors, transcripts, generated summaries, and channel states in a local SQLite database (`data/tubedigest.db`)—avoiding re-processing and saving AI tokens.
+* **Database-Driven Prompt Templates**: Prompt templates reside directly in SQLite (`prompts` table), allowing custom prompts per channel with zero loose files.
+* **Built-in SQLite Storage**: Saves channel authors, prompts, transcripts, generated summaries, and channel states in a local SQLite database (`data/tubedigest.db`)—avoiding re-processing and saving AI tokens.
 * **Separated Query Architecture**: All SQL statements reside in a dedicated `DatabaseQueries` class for clean maintainability.
 * **Rich HTML Email Digests**: Delivers clean, responsive emails with video thumbnails, key takeaways in Markdown format, and direct YouTube links.
 * **Headless & Cron-Ready**: Built for automated background execution on home servers, Linux VPS, or Raspberry Pi boards.
@@ -34,14 +34,12 @@ tubedigest/
 ├── tubedigest.py            # Main application entry point & CLI manager
 ├── requirements.txt         # Python package dependencies
 ├── TECHNICAL_SPECIFICATIONS.md # Detailed architecture and engineering specs
-├── prompts/                 # Prompt templates directory
-│   └── default_summary.txt  # Default summary prompt template
 ├── data/                    # Local SQLite database directory (ignored by Git)
 │   └── .gitkeep
 ├── core/
 │   ├── __init__.py
 │   ├── queries.py           # Centralized DatabaseQueries SQL store
-│   ├── database.py          # SQLite DatabaseManager for channels, authors, and archives
+│   ├── database.py          # SQLite DatabaseManager for channels, authors, prompts, and archives
 │   ├── state_manager.py     # Handles filesystem I/O and execution logs
 │   └── tube_digest.py       # Core logic: RSS parsing, Gemini client, SMTP dispatch
 └── logs/                    # Timestamped execution log files
@@ -108,24 +106,28 @@ log_file = "tubedigest.log"
 [gemini]
 api_key = "YOUR_GEMINI_API_KEY"
 model = "gemini-2.5-flash"
-prompt_file = "prompts/default_summary.txt"
 ```
 
 ---
 
-## 📺 Channel Management (CLI)
+## 📺 Channel & Prompt Management (CLI)
 
-Manage your monitored channels directly from the command line:
+Manage your monitored channels and prompt templates directly from the command line:
 
 ### Add a Channel
 ```bash
 python tubedigest.py --add-channel <CHANNEL_ID> --name "Channel Name"
 ```
-*(Optional: specify `--prompt prompts/custom_prompt.txt` to use a custom prompt for this channel).*
+*(Optional: specify `--prompt <PROMPT_ID>` to assign a specific prompt template, defaults to `'default'`).*
 
 ### List Tracked Channels
 ```bash
 python tubedigest.py --list-channels
+```
+
+### List Stored AI Prompts
+```bash
+python tubedigest.py --list-prompts
 ```
 
 ### Remove a Channel

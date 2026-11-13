@@ -4,17 +4,43 @@
 class DatabaseQueries:
   """Centralized SQL query store for DatabaseManager."""
 
+  DEFAULT_PROMPT_ID = "default"
+  DEFAULT_PROMPT_TITLE = "Standard Markdown Summary"
+  DEFAULT_PROMPT_TEXT = """Sei un assistente esperto nell'analisi di contenuti video. 
+Analizza la trascrizione del video di YouTube dal titolo "{video_title}" fornita di seguito.
+
+Genera un sunto approfondito e ben strutturato in lingua italiana, formattato rigorosamente in Markdown elegante e leggibile.
+Usa questa struttura:
+- Un titolo principale (`# {video_title}`)
+- Una sezione `## Panoramica Generale` (2-3 frasi chiare)
+- Una sezione `## Punti Chiave` (usa elenchi puntati con parole chiave in **grassetto**)
+- Una sezione `## Conclusioni e Riflessioni`
+
+Non aggiungere preamboli o commenti fuori dal Markdown.
+Trascrizione:
+{transcript}"""
+
   # ----------------------------------------------------------------------------
   # DDL: Schema Initialization
   # ----------------------------------------------------------------------------
   CREATE_TABLES = """
+    CREATE TABLE IF NOT EXISTS prompts (
+        prompt_id           TEXT PRIMARY KEY,
+        prompt_title        TEXT,
+        prompt_text         TEXT NOT NULL,
+        is_default          INTEGER DEFAULT 0,
+        created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS channels (
         channel_id          TEXT PRIMARY KEY,
         channel_name        TEXT,
-        prompt_file         TEXT DEFAULT 'prompts/default_summary.txt',
+        prompt_id           TEXT DEFAULT 'default',
         is_active           INTEGER DEFAULT 1,
         created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_checked_at     TIMESTAMP
+        last_checked_at     TIMESTAMP,
+        FOREIGN KEY (prompt_id) REFERENCES prompts (prompt_id)
     );
 
     CREATE TABLE IF NOT EXISTS channel_authors (
@@ -45,6 +71,38 @@ class DatabaseQueries:
   """
 
   # ----------------------------------------------------------------------------
+  # Prompt Queries
+  # ----------------------------------------------------------------------------
+  SEED_DEFAULT_PROMPT = """
+    INSERT OR IGNORE INTO prompts (prompt_id, prompt_title, prompt_text, is_default)
+    VALUES (?, ?, ?, 1)
+  """
+
+  LIST_PROMPTS = """
+    SELECT prompt_id, prompt_title, is_default, prompt_text, updated_at
+    FROM prompts
+    ORDER BY is_default DESC, prompt_id ASC
+  """
+
+  GET_PROMPT = """
+    SELECT prompt_text FROM prompts WHERE prompt_id = ?
+  """
+
+  GET_DEFAULT_PROMPT = """
+    SELECT prompt_text FROM prompts WHERE is_default = 1 LIMIT 1
+  """
+
+  UPSERT_PROMPT = """
+    INSERT INTO prompts (prompt_id, prompt_title, prompt_text, is_default)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(prompt_id) DO UPDATE SET
+        prompt_title = excluded.prompt_title,
+        prompt_text = excluded.prompt_text,
+        is_default = excluded.is_default,
+        updated_at = CURRENT_TIMESTAMP
+  """
+
+  # ----------------------------------------------------------------------------
   # Channel Queries
   # ----------------------------------------------------------------------------
   CHECK_CHANNEL_EXISTS = """
@@ -52,14 +110,14 @@ class DatabaseQueries:
   """
 
   INSERT_CHANNEL = """
-    INSERT INTO channels (channel_id, channel_name, prompt_file, is_active)
-    VALUES (?, ?, COALESCE(?, 'prompts/default_summary.txt'), 1)
+    INSERT INTO channels (channel_id, channel_name, prompt_id, is_active)
+    VALUES (?, ?, COALESCE(?, 'default'), 1)
   """
 
   UPDATE_CHANNEL = """
     UPDATE channels 
     SET channel_name = COALESCE(?, channel_name),
-        prompt_file = COALESCE(?, prompt_file),
+        prompt_id = COALESCE(?, prompt_id),
         is_active = 1
     WHERE channel_id = ?
   """
@@ -72,18 +130,20 @@ class DatabaseQueries:
     SELECT 
         c.channel_id,
         c.channel_name,
-        c.prompt_file,
+        c.prompt_id,
         c.is_active,
         c.last_checked_at,
         a.author_name,
-        a.author_url
+        a.author_url,
+        p.prompt_title
     FROM channels c
     LEFT JOIN channel_authors a ON c.channel_id = a.channel_id
+    LEFT JOIN prompts p ON c.prompt_id = p.prompt_id
     ORDER BY c.is_active DESC, c.channel_name ASC, c.channel_id ASC
   """
 
   GET_ACTIVE_CHANNELS = """
-    SELECT channel_id, channel_name, prompt_file 
+    SELECT channel_id, channel_name, prompt_id 
     FROM channels 
     WHERE is_active = 1 
     ORDER BY channel_id ASC

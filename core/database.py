@@ -6,7 +6,7 @@ from core.queries import DatabaseQueries
 
 
 class DatabaseManager:
-  """Manages the SQLite database for channels, authors, and processed video archives."""
+  """Manages the SQLite database for channels, authors, prompts, and processed video archives."""
 
   def __init__(self, db_path: str):
     if not db_path:
@@ -25,17 +25,77 @@ class DatabaseManager:
     return conn
 
   def init_db(self):
-    """Initializes tables and indexes using DatabaseQueries.CREATE_TABLES."""
+    """Initializes tables, indexes, and default prompt seed."""
     with self.get_connection() as conn:
+      # Migration safeguard: if channels had old prompt_file column, migrate to prompt_id
+      cursor = conn.execute("PRAGMA table_info(channels)")
+      columns = [row["name"] for row in cursor.fetchall()]
+      if columns and "prompt_file" in columns and "prompt_id" not in columns:
+        conn.execute("ALTER TABLE channels ADD COLUMN prompt_id TEXT DEFAULT 'default'")
+
       conn.executescript(DatabaseQueries.CREATE_TABLES)
 
+      # Seed default prompt if not already present
+      conn.execute(
+          DatabaseQueries.SEED_DEFAULT_PROMPT,
+          (
+              DatabaseQueries.DEFAULT_PROMPT_ID,
+              DatabaseQueries.DEFAULT_PROMPT_TITLE,
+              DatabaseQueries.DEFAULT_PROMPT_TEXT,
+          ),
+      )
+      conn.commit()
+
+  # ----------------------------------------------------------------------------
+  # Prompt Operations
+  # ----------------------------------------------------------------------------
+  def list_prompts(self) -> List[Dict[str, Any]]:
+    """Retrieves all stored prompts."""
+    with self.get_connection() as conn:
+      rows = conn.execute(DatabaseQueries.LIST_PROMPTS).fetchall()
+      return [dict(row) for row in rows]
+
+  def get_prompt_text(self, prompt_id: Optional[str] = None) -> str:
+    """Retrieves prompt text by prompt_id or falls back to the default prompt."""
+    with self.get_connection() as conn:
+      if prompt_id:
+        row = conn.execute(DatabaseQueries.GET_PROMPT, (prompt_id,)).fetchone()
+        if row and row["prompt_text"]:
+          return row["prompt_text"]
+
+      # Fallback to default prompt
+      default_row = conn.execute(DatabaseQueries.GET_DEFAULT_PROMPT).fetchone()
+      if default_row and default_row["prompt_text"]:
+        return default_row["prompt_text"]
+
+    return DatabaseQueries.DEFAULT_PROMPT_TEXT
+
+  def upsert_prompt(
+      self,
+      prompt_id: str,
+      prompt_title: str,
+      prompt_text: str,
+      is_default: int = 0,
+  ):
+    """Inserts or updates a prompt template in the database."""
+    with self.get_connection() as conn:
+      conn.execute(
+          DatabaseQueries.UPSERT_PROMPT,
+          (prompt_id, prompt_title, prompt_text, is_default),
+      )
+      conn.commit()
+
+  # ----------------------------------------------------------------------------
+  # Channel Operations
+  # ----------------------------------------------------------------------------
   def add_channel(
       self,
       channel_id: str,
       channel_name: Optional[str] = None,
-      prompt_file: Optional[str] = None,
+      prompt_id: Optional[str] = None,
   ) -> bool:
     """Adds a new channel or reactivates/updates an existing one."""
+    resolved_prompt_id = prompt_id or "default"
     with self.get_connection() as conn:
       existing = conn.execute(
           DatabaseQueries.CHECK_CHANNEL_EXISTS,
@@ -44,12 +104,12 @@ class DatabaseManager:
       if existing:
         conn.execute(
             DatabaseQueries.UPDATE_CHANNEL,
-            (channel_name, prompt_file, channel_id),
+            (channel_name, resolved_prompt_id, channel_id),
         )
       else:
         conn.execute(
             DatabaseQueries.INSERT_CHANNEL,
-            (channel_id, channel_name, prompt_file),
+            (channel_id, channel_name, resolved_prompt_id),
         )
       conn.commit()
     return True
@@ -62,7 +122,7 @@ class DatabaseManager:
       return cur.rowcount > 0
 
   def list_channels(self) -> List[Dict[str, Any]]:
-    """Retrieves all tracked channels joined with author information."""
+    """Retrieves all tracked channels joined with author and prompt metadata."""
     with self.get_connection() as conn:
       rows = conn.execute(DatabaseQueries.LIST_CHANNELS).fetchall()
       return [dict(row) for row in rows]
@@ -73,6 +133,20 @@ class DatabaseManager:
       rows = conn.execute(DatabaseQueries.GET_ACTIVE_CHANNELS).fetchall()
       return [dict(row) for row in rows]
 
+  def update_channel_checked(
+      self, channel_id: str, channel_name: Optional[str] = None
+  ):
+    """Updates the last_checked_at timestamp and optionally the channel name."""
+    with self.get_connection() as conn:
+      conn.execute(
+          DatabaseQueries.UPDATE_CHANNEL_CHECKED,
+          (channel_name, channel_id),
+      )
+      conn.commit()
+
+  # ----------------------------------------------------------------------------
+  # Author Operations
+  # ----------------------------------------------------------------------------
   def upsert_channel_author(
       self,
       channel_id: str,
@@ -97,6 +171,9 @@ class DatabaseManager:
       ).fetchone()
       return dict(row) if row else None
 
+  # ----------------------------------------------------------------------------
+  # Video Archive Operations
+  # ----------------------------------------------------------------------------
   def is_video_processed(self, video_id: str) -> bool:
     """Checks whether a video ID has already been processed."""
     with self.get_connection() as conn:
@@ -128,16 +205,5 @@ class DatabaseManager:
               summary_markdown,
               status,
           ),
-      )
-      conn.commit()
-
-  def update_channel_checked(
-      self, channel_id: str, channel_name: Optional[str] = None
-  ):
-    """Updates the last_checked_at timestamp and optionally the channel name."""
-    with self.get_connection() as conn:
-      conn.execute(
-          DatabaseQueries.UPDATE_CHANNEL_CHECKED,
-          (channel_name, channel_id),
       )
       conn.commit()

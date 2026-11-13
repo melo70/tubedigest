@@ -25,15 +25,13 @@ The project is structured with an internal `core/` package divided into the foll
 │
 ├── config.toml              # Centralized configuration file (ignored by Git)
 ├── config.example.toml      # Configuration template with placeholder values
-├── tubedigest.py            # Main entry point & CLI channel manager
-├── prompts/                 # Externalized prompt templates
-│   └── default_summary.txt  # Default Gemini summarization prompt template
+├── tubedigest.py            # Main entry point & CLI channel/prompt manager
 ├── data/                    # Local SQLite database directory (ignored by Git)
 │   └── .gitkeep
 ├── /core                    # Python package for internal application modules
 │   ├── __init__.py          # Package initializer
 │   ├── queries.py           # DatabaseQueries class (centralized SQL store)
-│   ├── database.py          # DatabaseManager module (SQLite channels, authors, and archive)
+│   ├── database.py          # DatabaseManager module (SQLite channels, authors, prompts, and archive)
 │   ├── state_manager.py     # StateManager module (filesystem I/O and logging)
 │   └── tube_digest.py       # TubeDigest module (RSS, Gemini API, SMTP email)
 └── /logs                    # Output directory for execution logs
@@ -48,7 +46,7 @@ The project is structured with an internal `core/` package divided into the foll
 The configuration file must contain the following sections and keys:
 
 * `[youtube]`: `feed_url_template` (RSS feed URL template containing the `{channel_id}` placeholder).
-* `[gemini]`: `api_key` (Google Gemini API key), `model` (e.g., `gemini-2.5-flash`), and `prompt_file` (path to prompt template file, e.g. `prompts/default_summary.txt`).
+* `[gemini]`: `api_key` (Google Gemini API key) and `model` (e.g., `gemini-2.5-flash`).
 * `[email]`: SMTP parameters (`sender`, `password`, `receiver`, `smtp_server`, `smtp_port`).
 * `[storage]`: File and directory paths (`db_path`, `logs_dir`, `log_file`).
 
@@ -61,13 +59,16 @@ Database logic is split between a dedicated SQL query repository and an operatio
 * **`DatabaseQueries` (`core/queries.py`)**: Centralized repository containing all DDL and DML statements, isolating raw SQL from Python logic.
 * **`DatabaseManager` (`core/database.py`)**: Executes queries, handles connections, transactions, and foreign keys.
 * **Schema Tables**:
-  * `channels`: `channel_id` (PK), `channel_name`, `prompt_file`, `is_active`, `last_checked_at`, `created_at`.
+  * `prompts`: `prompt_id` (PK), `prompt_title`, `prompt_text`, `is_default`, `created_at`, `updated_at`.
+  * `channels`: `channel_id` (PK), `channel_name`, `prompt_id` (FK -> prompts), `is_active`, `last_checked_at`, `created_at`.
   * `channel_authors`: `channel_id` (PK, FK -> channels), `author_name`, `author_url`, `channel_title`, `custom_url`, `updated_at`.
   * `processed_videos`: `video_id` (PK), `channel_id` (FK -> channels), `video_title`, `video_url`, `transcript`, `summary_markdown`, `status`, `email_sent_at`, `created_at`.
 * **Key Methods**:
-  * `add_channel(...)`: Adds or reactivates a channel in SQLite.
+  * `add_channel(...)`: Adds or reactivates a channel in SQLite linked to a `prompt_id`.
   * `remove_channel(...)`: Cascading delete of a channel and associated records.
-  * `list_channels()`: Returns all channels joined with author metadata.
+  * `list_channels()`: Returns all channels joined with author and prompt metadata.
+  * `list_prompts()`: Returns all stored prompt templates.
+  * `get_prompt_text(...)`: Retrieves prompt text by ID or falls back to default.
   * `upsert_channel_author(...)`: Automatically updates author biographical information when detected from RSS feeds.
   * `get_active_channels()`: Returns active channels for batch processing.
   * `is_video_processed(video_id)`: Instant index lookup preventing duplicate processing.

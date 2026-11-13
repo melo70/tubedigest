@@ -2,17 +2,21 @@
 """
 Application: TubeDigest
 Description: Automated pipeline that monitors multiple YouTube channels via RSS,
-             stores channel definitions and processed videos in SQLite, generates
-             AI summaries with Google Gemini, and dispatches HTML email digests.
+             stores channel definitions, author profiles, prompts, and processed
+             videos in SQLite, generates AI summaries with Google Gemini, and
+             dispatches HTML email digests.
 
 Usage:
     - Normal pipeline execution (e.g. via cron):
       python tubedigest.py
 
     - Channel management via CLI:
-      python tubedigest.py --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_FILE>]
+      python tubedigest.py --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
       python tubedigest.py --remove-channel <CHANNEL_ID>
       python tubedigest.py --list-channels
+
+    - Prompt management via CLI:
+      python tubedigest.py --list-prompts
 """
 
 import os
@@ -40,15 +44,37 @@ def load_config() -> dict:
 
 
 def handle_cli_channels(args, db: DatabaseManager) -> bool:
-  """Handles CLI channel management arguments. Returns True if a command was handled."""
+  """Handles CLI channel and prompt management arguments. Returns True if handled."""
+  if args.list_prompts:
+    prompts = db.list_prompts()
+    if not prompts:
+      print("No prompts found in database.")
+      return True
+
+    header = f"{'Default':<9} {'Prompt ID':<18} {'Title':<32} {'Updated At'}"
+    print("\n" + "=" * len(header))
+    print("Stored AI Prompt Templates (SQLite):")
+    print("-" * len(header))
+    print(header)
+    print("-" * len(header))
+    for p in prompts:
+      is_def = "[YES]" if p["is_default"] else "[NO]"
+      pid = p["prompt_id"]
+      title = (p["prompt_title"] or "-")[:30]
+      updated = str(p.get("updated_at") or "-")[:19]
+      print(f"{is_def:<9} {pid:<18} {title:<32} {updated}")
+    print("=" * len(header))
+    print(f"Total: {len(prompts)} prompt template(s)\n")
+    return True
+
   if args.add_channel:
     db.add_channel(
         channel_id=args.add_channel,
         channel_name=args.name,
-        prompt_file=args.prompt,
+        prompt_id=args.prompt,
     )
     name_display = f" '{args.name}'" if args.name else ""
-    prompt_display = f" with prompt '{args.prompt}'" if args.prompt else ""
+    prompt_display = f" using prompt '{args.prompt or 'default'}'"
     print(f"✓ Channel{name_display} ({args.add_channel}) added/updated successfully{prompt_display}.")
     return True
 
@@ -67,7 +93,7 @@ def handle_cli_channels(args, db: DatabaseManager) -> bool:
       print("Add a channel using: python tubedigest.py --add-channel <CHANNEL_ID> [--name <NAME>]")
       return True
 
-    header = f"{'Status':<10} {'Channel ID':<26} {'Channel Name':<25} {'Author / Creator':<20} {'Prompt File'}"
+    header = f"{'Status':<10} {'Channel ID':<26} {'Channel Name':<25} {'Author / Creator':<20} {'Prompt ID'}"
     print("\n" + "=" * len(header))
     print("Tracked YouTube Channels (SQLite):")
     print("-" * len(header))
@@ -77,7 +103,7 @@ def handle_cli_channels(args, db: DatabaseManager) -> bool:
       status = "[ACTIVE]" if ch["is_active"] else "[DISABLED]"
       name = (ch["channel_name"] or "Unknown")[:23]
       author = (ch.get("author_name") or "-")[:18]
-      prompt = ch["prompt_file"] or "Default"
+      prompt = ch.get("prompt_id") or "default"
       print(f"{status:<10} {ch['channel_id']:<26} {name:<25} {author:<20} {prompt}")
     print("=" * len(header))
     print(f"Total: {len(channels)} channel(s)\n")
@@ -100,7 +126,7 @@ def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager,
   for channel in active_channels:
     channel_id = channel["channel_id"]
     channel_label = channel.get("channel_name") or channel_id
-    prompt_file = channel.get("prompt_file")
+    prompt_id = channel.get("prompt_id") or "default"
 
     state_manager.log_message(f"[{channel_label}] Checking for latest video...")
     video_url, video_title, video_id, detected_channel_title, author_info = digest.get_latest_video(channel_id)
@@ -135,9 +161,10 @@ def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager,
     transcript = digest.get_transcript(video_id)
 
     if transcript:
-      state_manager.log_message(f"[{channel_label}] Generating summary with Gemini...")
+      state_manager.log_message(f"[{channel_label}] Generating summary with Gemini (Prompt: {prompt_id})...")
+      prompt_template = db.get_prompt_text(prompt_id)
       sunto_markdown = digest.summarize_transcript(
-          video_title, transcript, prompt_file=prompt_file
+          video_title, transcript, prompt_template=prompt_template
       )
 
       email_subject = f"{detected_channel_title or channel_label} - {video_title}"
@@ -187,8 +214,8 @@ def main():
   )
   parser.add_argument(
       "--prompt",
-      metavar="PROMPT_FILE",
-      help="Optional path to a custom prompt file for this channel (used with --add-channel).",
+      metavar="PROMPT_ID",
+      help="Optional ID of prompt template in database (defaults to 'default').",
   )
   parser.add_argument(
       "--remove-channel",
@@ -200,6 +227,11 @@ def main():
       action="store_true",
       help="List all tracked channels in SQLite database.",
   )
+  parser.add_argument(
+      "--list-prompts",
+      action="store_true",
+      help="List all stored AI prompt templates in SQLite database.",
+  )
 
   args = parser.parse_args()
 
@@ -210,7 +242,7 @@ def main():
     raise KeyError("Missing required 'db_path' in [storage] configuration section.")
   db = DatabaseManager(db_path=db_path)
 
-  # If a CLI channel management command was provided, handle it and exit
+  # If a CLI management command was provided, handle it and exit
   if handle_cli_channels(args, db):
     return
 

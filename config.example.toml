@@ -1,15 +1,16 @@
 # ==============================================================================
 # TubeDigest - Configuration Template
 # ==============================================================================
-# This configuration file defines parameters, credentials, paths, and templates
-# used by the TubeDigest pipeline to monitor YouTube channels, generate AI-powered
+# This configuration file defines parameters, credentials, and paths used by
+# the TubeDigest pipeline to monitor YouTube channels, generate AI-powered
 # summaries, and dispatch email digests.
 #
 # Copy this file to 'config.toml' and replace the placeholder values with your
 # actual configuration and credentials.
 #
-# Channels to monitor are stored and managed directly in SQLite via CLI:
+# Channels and AI Prompts are stored and managed directly in SQLite via CLI:
 #   python tubedigest.py --add-channel <CHANNEL_ID> --name <NAME>
+#   python tubedigest.py --list-prompts
 #
 # VARIABLES OVERVIEW:
 #
@@ -24,15 +25,13 @@
 #   smtp_port         : Port number for SMTP submission (typically 587 for STARTTLS or 465 for SSL).
 #
 # [storage]
-#   db_path           : Path to the SQLite database file (stores channels, authors, and videos).
+#   db_path           : Path to the SQLite database file (stores channels, authors, prompts, and videos).
 #   logs_dir          : Directory where application execution logs are stored.
 #   log_file          : Name of the log file (inside logs_dir).
 #
 # [gemini]
 #   api_key           : Google Gemini API key used to authenticate with Google GenAI.
 #   model             : Gemini model identifier (e.g. "gemini-2.5-flash", "gemini-3.6-flash").
-#   prompt_file       : Path to the prompt template file (e.g. "prompts/default_summary.txt").
-#   prompt            : Optional inline prompt fallback if prompt_file is not used.
 # ==============================================================================
 
 [youtube]
@@ -53,4 +52,3 @@ log_file = "tubedigest.log"
 [gemini]
 api_key = "YOUR_API_KEY"
 model = "gemini-2.5-flash"
-prompt_file = "prompts/default_summary.txt"
