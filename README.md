@@ -44,7 +44,6 @@ tubedigest/
 │   ├── database.py          # SQLite DatabaseManager for channels, authors, and archives
 │   ├── state_manager.py     # Handles filesystem I/O and execution logs
 │   └── tube_digest.py       # Core logic: RSS parsing, Gemini client, SMTP dispatch
-├── transcripts/             # Backup raw video transcript text archives
 └── logs/                    # Timestamped execution log files
 ```
 
@@ -102,9 +101,8 @@ smtp_server = "smtp.gmail.com"
 smtp_port = 587
 
 [storage]
-db_path = "tubedigest.db"
+db_path = "data/tubedigest.db"
 logs_dir = "logs"
-transcripts_dir = "transcripts"
 log_file = "tubedigest.log"
 
 [gemini]

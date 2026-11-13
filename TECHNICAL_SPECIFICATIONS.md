@@ -36,7 +36,6 @@ The project is structured with an internal `core/` package divided into the foll
 │   ├── database.py          # DatabaseManager module (SQLite channels, authors, and archive)
 │   ├── state_manager.py     # StateManager module (filesystem I/O and logging)
 │   └── tube_digest.py       # TubeDigest module (RSS, Gemini API, SMTP email)
-├── /transcripts             # Output directory for saving raw downloaded transcripts
 └── /logs                    # Output directory for execution logs
 ```
 
@@ -51,7 +50,7 @@ The configuration file must contain the following sections and keys:
 * `[youtube]`: `feed_url_template` (RSS feed URL template containing the `{channel_id}` placeholder).
 * `[gemini]`: `api_key` (Google Gemini API key), `model` (e.g., `gemini-2.5-flash`), and `prompt_file` (path to prompt template file, e.g. `prompts/default_summary.txt`).
 * `[email]`: SMTP parameters (`sender`, `password`, `receiver`, `smtp_server`, `smtp_port`).
-* `[storage]`: File and directory paths (`db_path`, `logs_dir`, `transcripts_dir`, `log_file`).
+* `[storage]`: File and directory paths (`db_path`, `logs_dir`, `log_file`).
 
 ---
 
@@ -76,19 +75,16 @@ Database logic is split between a dedicated SQL query repository and an operatio
 
 ---
 
-### 4.3. State and Logging Module (`core/state_manager.py` -> `StateManager`)
+### 4.3. Logging Module (`core/state_manager.py` -> `StateManager`)
 
-The `StateManager` class handles filesystem I/O, state persistence, and logging exclusively:
+The `StateManager` class handles application execution logging:
 
-* **Initialization (`__init__`)**: Reads storage configuration, resolves paths, and ensures automatic directory creation (`logs_dir`, `transcripts_dir`) if they do not already exist via `os.makedirs(..., exist_ok=True)`.
-* **`load_last_id()`**: Reads the ID of the last processed video from the state file. Returns `None` if the file does not exist.
-* **`save_last_id(video_id)`**: Writes and persists the ID of the last processed video to the state file.
-* **`save_transcript(video_id, transcript_text)`**: Saves the raw transcript as a `.txt` file inside the configured transcripts directory, named `{video_id}.txt`.
+* **Initialization (`__init__`)**: Reads storage configuration, resolves log paths, and ensures automatic directory creation (`logs_dir`) if it does not already exist via `os.makedirs(..., exist_ok=True)`.
 * **`log_message(message)`**: Prints the message to stdout and appends it to the configured log file (e.g., `logs/tubedigest.log`) prefixed with a formatted timestamp (`%Y-%m-%d %H:%M:%S`).
 
 ---
 
-### 4.3. Business Logic Module (`core/tube_digest.py` -> `TubeDigest`)
+### 4.4. Business Logic Module (`core/tube_digest.py` -> `TubeDigest`)
 
 The `TubeDigest` class encapsulates all interactions with external services:
 

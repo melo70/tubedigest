@@ -90,23 +90,12 @@ def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager,
   """Runs the digest check for all active channels in the database."""
   active_channels = db.get_active_channels()
 
-  # Auto-migration fallback: if DB is empty, seed from config.toml if channel_id exists
-  if not active_channels:
-    default_ch = config.get("youtube", {}).get("channel_id")
-    if default_ch:
-      state_manager.log_message(f"Seeding database with default channel from config.toml: {default_ch}")
-      db.add_channel(default_ch, channel_name="Default Channel")
-      active_channels = db.get_active_channels()
-
   if not active_channels:
     state_manager.log_message("No active channels configured in SQLite database.")
     state_manager.log_message("Add a channel using: python tubedigest.py --add-channel <CHANNEL_ID> [--name <NAME>]")
     return
 
   state_manager.log_message(f"Starting check for {len(active_channels)} active channel(s)...")
-
-  storage = config.get("storage", {})
-  transcripts_dir = storage.get("transcripts_dir", "transcripts")
 
   for channel in active_channels:
     channel_id = channel["channel_id"]
@@ -146,10 +135,6 @@ def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager,
     transcript = digest.get_transcript(video_id)
 
     if transcript:
-      # Save raw backup transcript in filesystem
-      state_manager.save_transcript(video_id, transcript)
-      state_manager.log_message(f"[{channel_label}] Transcript saved to {transcripts_dir}/{video_id}.txt")
-
       state_manager.log_message(f"[{channel_label}] Generating summary with Gemini...")
       sunto_markdown = digest.summarize_transcript(
           video_title, transcript, prompt_file=prompt_file

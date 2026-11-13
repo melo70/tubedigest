@@ -8,11 +8,13 @@
 # Copy this file to 'config.toml' and replace the placeholder values with your
 # actual configuration and credentials.
 #
+# Channels to monitor are stored and managed directly in SQLite via CLI:
+#   python tubedigest.py --add-channel <CHANNEL_ID> --name <NAME>
+#
 # VARIABLES OVERVIEW:
 #
 # [youtube]
-#   channel_id        : The 24-character YouTube Channel ID to monitor (e.g. "UC...").
-#   feed_url_template : Template URL for the YouTube RSS feed with {channel_id} placeholder.
+#   feed_url_template : Template URL for YouTube RSS feeds with {channel_id} placeholder.
 #
 # [email]
 #   sender            : Email address used to dispatch notifications.
@@ -21,14 +23,9 @@
 #   smtp_server       : Outgoing SMTP server hostname (e.g. "smtp.gmail.com").
 #   smtp_port         : Port number for SMTP submission (typically 587 for STARTTLS or 465 for SSL).
 #
-# [file]
-#   state_file        : Legacy setting for the state persistence file (kept for compatibility).
-#
 # [storage]
-#   db_path           : Path to the SQLite database file (stores channels and processed videos).
-#   last_id_file      : Path to the state file tracking the ID of the last processed video (legacy).
+#   db_path           : Path to the SQLite database file (stores channels, authors, and videos).
 #   logs_dir          : Directory where application execution logs are stored.
-#   transcripts_dir   : Directory where downloaded raw transcripts (.txt) are archived.
 #   log_file          : Name of the log file (inside logs_dir).
 #
 # [gemini]
@@ -39,29 +36,21 @@
 # ==============================================================================
 
 [youtube]
-channel_id = "YOUR_PREFERRED_YT_CHANNEL_ID"
 feed_url_template = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 
 [email]
-sender = "name.surname@porko.com"
-password = "app password"
-receiver = "name.surname@porko.com"
-smtp_server = "smtp.porko.com"
-smtp_port = 111
-
-[file]
-state_file = "last_video_id.txt"
+sender = "name.surname@example.com"
+password = "your-app-password"
+receiver = "name.surname@example.com"
+smtp_server = "smtp.example.com"
+smtp_port = 587
 
 [storage]
 db_path = "data/tubedigest.db"
-last_id_file = "last_video_id.txt"
 logs_dir = "logs"
-transcripts_dir = "transcripts"
 log_file = "tubedigest.log"
 
 [gemini]
 api_key = "YOUR_API_KEY"
 model = "gemini-2.5-flash"
 prompt_file = "prompts/default_summary.txt"
-
-

@@ -24,9 +24,6 @@ __pycache__/
 logs/
 *.log
 tubedigest.log
-transcripts/*.txt
-!transcripts/.gitkeep
-last_video_id.txt
 *.db
 *.sqlite
 *.sqlite3

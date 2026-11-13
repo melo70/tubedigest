@@ -19,12 +19,6 @@ class TubeDigest:
         "feed_url_template",
         "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}",
     )
-    self.default_channel_id = yt_config.get("channel_id")
-    self.rss_url = yt_config.get("channel_rss_url")
-    if not self.rss_url and self.default_channel_id:
-      self.rss_url = self.feed_url_template.format(
-          channel_id=self.default_channel_id
-      )
 
     gemini_cfg = config.get("gemini", {})
     self.gemini_api_key = gemini_cfg.get("api_key")
