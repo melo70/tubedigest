@@ -67,7 +67,7 @@ def handle_cli_channels(args, db: DatabaseManager) -> bool:
       print("Add a channel using: python tubedigest.py --add-channel <CHANNEL_ID> [--name <NAME>]")
       return True
 
-    header = f"{'Status':<10} {'Channel ID':<26} {'Name':<30} {'Prompt File'}"
+    header = f"{'Status':<10} {'Channel ID':<26} {'Channel Name':<25} {'Author / Creator':<20} {'Prompt File'}"
     print("\n" + "=" * len(header))
     print("Tracked YouTube Channels (SQLite):")
     print("-" * len(header))
@@ -75,9 +75,10 @@ def handle_cli_channels(args, db: DatabaseManager) -> bool:
     print("-" * len(header))
     for ch in channels:
       status = "[ACTIVE]" if ch["is_active"] else "[DISABLED]"
-      name = (ch["channel_name"] or "Unknown")[:28]
+      name = (ch["channel_name"] or "Unknown")[:23]
+      author = (ch.get("author_name") or "-")[:18]
       prompt = ch["prompt_file"] or "Default"
-      print(f"{status:<10} {ch['channel_id']:<26} {name:<30} {prompt}")
+      print(f"{status:<10} {ch['channel_id']:<26} {name:<25} {author:<20} {prompt}")
     print("=" * len(header))
     print(f"Total: {len(channels)} channel(s)\n")
     return True
@@ -113,7 +114,16 @@ def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager,
     prompt_file = channel.get("prompt_file")
 
     state_manager.log_message(f"[{channel_label}] Checking for latest video...")
-    video_url, video_title, video_id, detected_channel_title = digest.get_latest_video(channel_id)
+    video_url, video_title, video_id, detected_channel_title, author_info = digest.get_latest_video(channel_id)
+
+    # Persist or update author metadata if detected from RSS
+    if author_info and (author_info.get("author_name") or detected_channel_title):
+      db.upsert_channel_author(
+          channel_id=channel_id,
+          author_name=author_info.get("author_name"),
+          author_url=author_info.get("author_url"),
+          channel_title=detected_channel_title,
+      )
 
     if not video_id:
       state_manager.log_message(f"[{channel_label}] No video found or feed parsing error.")

@@ -28,9 +28,12 @@ The project is structured with an internal `core/` package divided into the foll
 ├── tubedigest.py            # Main entry point & CLI channel manager
 ├── prompts/                 # Externalized prompt templates
 │   └── default_summary.txt  # Default Gemini summarization prompt template
+├── data/                    # Local SQLite database directory (ignored by Git)
+│   └── .gitkeep
 ├── /core                    # Python package for internal application modules
 │   ├── __init__.py          # Package initializer
-│   ├── database.py          # DatabaseManager module (SQLite channels and video archive)
+│   ├── queries.py           # DatabaseQueries class (centralized SQL store)
+│   ├── database.py          # DatabaseManager module (SQLite channels, authors, and archive)
 │   ├── state_manager.py     # StateManager module (filesystem I/O and logging)
 │   └── tube_digest.py       # TubeDigest module (RSS, Gemini API, SMTP email)
 ├── /transcripts             # Output directory for saving raw downloaded transcripts
@@ -52,19 +55,23 @@ The configuration file must contain the following sections and keys:
 
 ---
 
-### 4.2. Database Management Module (`core/database.py` -> `DatabaseManager`)
+### 4.2. Database & SQL Architecture (`core/queries.py` & `core/database.py`)
 
-The `DatabaseManager` class encapsulates all SQLite database operations:
+Database logic is split between a dedicated SQL query repository and an operational manager:
 
-* **Tables**:
+* **`DatabaseQueries` (`core/queries.py`)**: Centralized repository containing all DDL and DML statements, isolating raw SQL from Python logic.
+* **`DatabaseManager` (`core/database.py`)**: Executes queries, handles connections, transactions, and foreign keys.
+* **Schema Tables**:
   * `channels`: `channel_id` (PK), `channel_name`, `prompt_file`, `is_active`, `last_checked_at`, `created_at`.
-  * `processed_videos`: `video_id` (PK), `channel_id` (FK), `video_title`, `video_url`, `transcript`, `summary_markdown`, `status`, `email_sent_at`, `created_at`.
-* **Methods**:
-  * `add_channel(channel_id, channel_name, prompt_file)`: Adds or updates a YouTube channel in SQLite.
-  * `remove_channel(channel_id)`: Deletes a channel from the database.
-  * `list_channels()`: Returns all channels for CLI display.
-  * `get_active_channels()`: Returns currently active channels for pipeline execution.
-  * `is_video_processed(video_id)`: Checks whether a video has already been processed and archived.
+  * `channel_authors`: `channel_id` (PK, FK -> channels), `author_name`, `author_url`, `channel_title`, `custom_url`, `updated_at`.
+  * `processed_videos`: `video_id` (PK), `channel_id` (FK -> channels), `video_title`, `video_url`, `transcript`, `summary_markdown`, `status`, `email_sent_at`, `created_at`.
+* **Key Methods**:
+  * `add_channel(...)`: Adds or reactivates a channel in SQLite.
+  * `remove_channel(...)`: Cascading delete of a channel and associated records.
+  * `list_channels()`: Returns all channels joined with author metadata.
+  * `upsert_channel_author(...)`: Automatically updates author biographical information when detected from RSS feeds.
+  * `get_active_channels()`: Returns active channels for batch processing.
+  * `is_video_processed(video_id)`: Instant index lookup preventing duplicate processing.
   * `save_processed_video(...)`: Archives the video, transcript, and generated summary.
 
 ---

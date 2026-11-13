@@ -18,7 +18,8 @@ It continuously monitors multiple YouTube channels via RSS feeds, downloads new 
 * **Automatic Transcript Extraction**: Pulls subtitle and caption tracks automatically using `youtube-transcript-api` (supporting language fallbacks).
 * **AI-Powered Summarization**: Generates insightful, structured summaries powered by Google's Gemini models (`gemini-2.5-flash`, `gemini-3.6-flash`, etc.).
 * **Externalized Prompt Templates**: Prompts are stored in clean template files (`prompts/default_summary.txt`), with optional channel-specific custom prompts.
-* **Built-in SQLite Storage**: Saves transcripts, generated summaries, and channel states in a local SQLite database (`tubedigest.db`)—avoiding re-processing and saving AI tokens.
+* **Built-in SQLite Storage**: Saves channel authors, transcripts, generated summaries, and channel states in a local SQLite database (`data/tubedigest.db`)—avoiding re-processing and saving AI tokens.
+* **Separated Query Architecture**: All SQL statements reside in a dedicated `DatabaseQueries` class for clean maintainability.
 * **Rich HTML Email Digests**: Delivers clean, responsive emails with video thumbnails, key takeaways in Markdown format, and direct YouTube links.
 * **Headless & Cron-Ready**: Built for automated background execution on home servers, Linux VPS, or Raspberry Pi boards.
 
@@ -35,9 +36,12 @@ tubedigest/
 ├── TECHNICAL_SPECIFICATIONS.md # Detailed architecture and engineering specs
 ├── prompts/                 # Prompt templates directory
 │   └── default_summary.txt  # Default summary prompt template
+├── data/                    # Local SQLite database directory (ignored by Git)
+│   └── .gitkeep
 ├── core/
 │   ├── __init__.py
-│   ├── database.py          # SQLite DatabaseManager for channels and video archives
+│   ├── queries.py           # Centralized DatabaseQueries SQL store
+│   ├── database.py          # SQLite DatabaseManager for channels, authors, and archives
 │   ├── state_manager.py     # Handles filesystem I/O and execution logs
 │   └── tube_digest.py       # Core logic: RSS parsing, Gemini client, SMTP dispatch
 ├── transcripts/             # Backup raw video transcript text archives

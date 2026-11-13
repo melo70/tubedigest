@@ -72,18 +72,30 @@ class TubeDigest:
       target_url = self.rss_url
     else:
       print("Error: No channel_id or RSS URL provided.")
-      return None, None, None, None
+      return None, None, None, None, None
 
     try:
       feed = feedparser.parse(target_url)
+      channel_title = feed.feed.get("title", "YouTube")
+      author_detail = feed.feed.get("author_detail", {})
+      author_name = feed.feed.get("author") or author_detail.get("name") or channel_title
+      author_url = author_detail.get("href") or (
+          f"https://www.youtube.com/channel/{channel_id}" if channel_id else None
+      )
+      author_info = {
+          "author_name": author_name,
+          "author_url": author_url,
+          "channel_title": channel_title,
+      }
+
       if feed.entries:
         latest = feed.entries[0]
         video_id = latest.id.split(":")[-1]
-        channel_title = feed.feed.get("title", "YouTube")
-        return latest.link, latest.title, video_id, channel_title
+        return latest.link, latest.title, video_id, channel_title, author_info
+      return None, None, None, channel_title, author_info
     except Exception as e:
       print(f"Error checking RSS feed for {channel_id or target_url}: {e}")
-    return None, None, None, None
+    return None, None, None, None, None
 
   def get_transcript(self, video_id):
     """Downloads the video transcript using the object-based API."""
