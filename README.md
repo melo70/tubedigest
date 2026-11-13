@@ -2,23 +2,25 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![AI Powered](https://img.shields.io/badge/AI-Google%20Gemini-orange.svg)](https://ai.google.dev/)
+[![Database](https://img.shields.io/badge/Database-SQLite3-green.svg)](https://www.sqlite.org/)
 [![Status](https://img.shields.io/badge/status-active-success.svg)]()
 
 **TubeDigest** is a lightweight, headless Python automation pipeline designed to run seamlessly on Linux servers or Raspberry Pi devices. 
 
-It continuously monitors your favorite YouTube channels via RSS feeds, downloads new video transcripts, produces structured, high-quality Markdown summaries using the Google Gemini API, and dispatches formatted HTML email digests directly to your inbox.
+It continuously monitors multiple YouTube channels via RSS feeds, downloads new video transcripts, produces structured, high-quality Markdown summaries using the Google Gemini API, and dispatches formatted HTML email digests directly to your inbox. All channel subscriptions, transcripts, and summaries are persistently managed through a lightweight local **SQLite** database.
 
 ---
 
 ## 🚀 Key Features
 
+* **Multi-Channel Management**: Monitor as many YouTube channels as you want, easily managed via CLI commands.
 * **Quota-Free Channel Tracking**: Monitors YouTube channels via standard RSS feeds—no complex YouTube Data API credentials or quota limits required.
 * **Automatic Transcript Extraction**: Pulls subtitle and caption tracks automatically using `youtube-transcript-api` (supporting language fallbacks).
-* **AI-Powered Summarization**: Generates insightful, well-structured summaries powered by Google's Gemini models (`gemini-2.5-flash`, `gemini-3.6-flash`, etc.).
+* **AI-Powered Summarization**: Generates insightful, structured summaries powered by Google's Gemini models (`gemini-2.5-flash`, `gemini-3.6-flash`, etc.).
+* **Externalized Prompt Templates**: Prompts are stored in clean template files (`prompts/default_summary.txt`), with optional channel-specific custom prompts.
+* **Built-in SQLite Storage**: Saves transcripts, generated summaries, and channel states in a local SQLite database (`tubedigest.db`)—avoiding re-processing and saving AI tokens.
 * **Rich HTML Email Digests**: Delivers clean, responsive emails with video thumbnails, key takeaways in Markdown format, and direct YouTube links.
-* **Smart State Persistence**: Tracks the last processed video ID to guarantee that each video is processed and emailed exactly once.
-* **Headless & Cron-Ready**: Built for background execution on home servers, Linux VPS, or Raspberry Pi boards.
-* **Modular Architecture & Zero Hardcoding**: Fully configurable via an external `config.toml` file with clean separation of concerns.
+* **Headless & Cron-Ready**: Built for automated background execution on home servers, Linux VPS, or Raspberry Pi boards.
 
 ---
 
@@ -28,14 +30,17 @@ It continuously monitors your favorite YouTube channels via RSS feeds, downloads
 tubedigest/
 ├── config.example.toml      # Configuration template with placeholder values
 ├── config.toml              # Your active configuration (ignored by Git)
-├── tubedigest.py            # Main application entry point & orchestrator
+├── tubedigest.py            # Main application entry point & CLI manager
 ├── requirements.txt         # Python package dependencies
 ├── TECHNICAL_SPECIFICATIONS.md # Detailed architecture and engineering specs
+├── prompts/                 # Prompt templates directory
+│   └── default_summary.txt  # Default summary prompt template
 ├── core/
 │   ├── __init__.py
-│   ├── state_manager.py     # Handles I/O, state persistence, and logging
+│   ├── database.py          # SQLite DatabaseManager for channels and video archives
+│   ├── state_manager.py     # Handles filesystem I/O and execution logs
 │   └── tube_digest.py       # Core logic: RSS parsing, Gemini client, SMTP dispatch
-├── transcripts/             # Saved raw video transcript text archives
+├── transcripts/             # Backup raw video transcript text archives
 └── logs/                    # Timestamped execution log files
 ```
 
@@ -46,7 +51,6 @@ tubedigest/
 * **Python 3.11 or higher**
 * A **Google Gemini API Key** (obtainable for free at [Google AI Studio](https://aistudio.google.com/))
 * An **SMTP-enabled email account** (e.g., Gmail with an [App Password](https://myaccount.google.com/apppasswords))
-* The **Channel ID** of the YouTube channel you want to monitor (e.g., `UC...`)
 
 ---
 
@@ -80,12 +84,10 @@ Copy the sample configuration file to `config.toml`:
 cp config.example.toml config.toml
 ```
 
-Edit `config.toml` with your favorite text editor (e.g., `nano config.toml`):
+Edit `config.toml` with your credentials:
 
 ```toml
 [youtube]
-# 24-character YouTube Channel ID to monitor
-channel_id = "UCxxxxxxxxxxxxxxxxxxxxxx"
 feed_url_template = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 
 [email]
@@ -96,7 +98,7 @@ smtp_server = "smtp.gmail.com"
 smtp_port = 587
 
 [storage]
-last_id_file = "last_video_id.txt"
+db_path = "tubedigest.db"
 logs_dir = "logs"
 transcripts_dir = "transcripts"
 log_file = "tubedigest.log"
@@ -104,29 +106,45 @@ log_file = "tubedigest.log"
 [gemini]
 api_key = "YOUR_GEMINI_API_KEY"
 model = "gemini-2.5-flash"
-prompt = """
-Sei un assistente esperto nell'analisi di contenuti video. 
-Analizza la trascrizione del video di YouTube dal titolo "{video_title}" fornita di seguito...
-"""
+prompt_file = "prompts/default_summary.txt"
 ```
 
 ---
 
-## 🧪 Testing Your Setup
+## 📺 Channel Management (CLI)
 
-Run the script manually to ensure everything is configured properly:
+Manage your monitored channels directly from the command line:
+
+### Add a Channel
+```bash
+python tubedigest.py --add-channel <CHANNEL_ID> --name "Channel Name"
+```
+*(Optional: specify `--prompt prompts/custom_prompt.txt` to use a custom prompt for this channel).*
+
+### List Tracked Channels
+```bash
+python tubedigest.py --list-channels
+```
+
+### Remove a Channel
+```bash
+python tubedigest.py --remove-channel <CHANNEL_ID>
+```
+
+---
+
+## 🧪 Running the Pipeline
+
+Run the pipeline manually to process all active channels:
 
 ```bash
 python tubedigest.py
 ```
 
 ### Expected Behavior:
-* If a new video is found, TubeDigest will download its transcript, call Gemini to generate the summary, send the email digest, and record the video ID in `last_video_id.txt`.
-* If no new video has been published since the last run, it will exit cleanly:
-  ```text
-  Checking for new videos...
-  No new video detected since last check.
-  ```
+* For each active channel, TubeDigest checks the latest video via RSS.
+* If a new video is found and has not been archived in SQLite, it downloads the transcript, requests Gemini for a Markdown summary, sends the email, and archives the video in SQLite.
+* If the video has already been processed, it skips processing instantly (consuming 0 Gemini tokens and sending no duplicate emails).
 
 ---
 
@@ -149,7 +167,7 @@ To monitor channels automatically in the background, set up a `cron` job on your
 
 ## 🔒 Security Best Practices
 
-* **Never commit `config.toml`**: The included `.gitignore` protects your private API keys and email passwords from being tracked.
+* **Never commit `config.toml` or `*.db`**: The included `.gitignore` protects your private API keys, email credentials, and local database.
 * **Use App Passwords**: When using Gmail or other providers, always generate dedicated Application Passwords rather than using your main account password.
 
 ---

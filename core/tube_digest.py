@@ -1,5 +1,7 @@
+import os
 import smtplib
 import ssl
+from typing import Optional
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import feedparser
@@ -7,45 +9,80 @@ import markdown
 from youtube_transcript_api import YouTubeTranscriptApi
 from google import genai
 
+
 class TubeDigest:
 
   def __init__(self, config):
     """Initializes the client and configuration parameters."""
     yt_config = config.get("youtube", {})
-    if "channel_id" in yt_config and "feed_url_template" in yt_config:
-      self.rss_url = yt_config["feed_url_template"].format(
-          channel_id=yt_config["channel_id"]
-      )
-    elif "channel_rss_url" in yt_config:
-      self.rss_url = yt_config["channel_rss_url"]
-    else:
-      raise KeyError(
-          "Missing 'youtube' configuration: specify 'channel_id' and 'feed_url_template' or 'channel_rss_url'."
+    self.feed_url_template = yt_config.get(
+        "feed_url_template",
+        "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}",
+    )
+    self.default_channel_id = yt_config.get("channel_id")
+    self.rss_url = yt_config.get("channel_rss_url")
+    if not self.rss_url and self.default_channel_id:
+      self.rss_url = self.feed_url_template.format(
+          channel_id=self.default_channel_id
       )
 
-    self.gemini_api_key = config["gemini"]["api_key"]
-    self.gemini_model = config["gemini"]["model"]
-    self.gemini_prompt = config["gemini"]["prompt"]
+    gemini_cfg = config.get("gemini", {})
+    self.gemini_api_key = gemini_cfg.get("api_key")
+    self.gemini_model = gemini_cfg.get("model", "gemini-2.5-flash")
 
-    self.sender = config["email"]["sender"]
-    self.password = config["email"]["password"]
-    self.receiver = config["email"]["receiver"]
-    self.smtp_server = config["email"]["smtp_server"]
-    self.smtp_port = config["email"]["smtp_port"]
+    # Load prompt template from file or fallback to inline/default
+    self.default_prompt = self._load_prompt(
+        gemini_cfg.get("prompt_file", "prompts/default_summary.txt"),
+        inline_fallback=gemini_cfg.get("prompt"),
+    )
+
+    email_cfg = config.get("email", {})
+    self.sender = email_cfg.get("sender")
+    self.password = email_cfg.get("password")
+    self.receiver = email_cfg.get("receiver")
+    self.smtp_server = email_cfg.get("smtp_server")
+    self.smtp_port = email_cfg.get("smtp_port", 587)
 
     self.client = genai.Client(api_key=self.gemini_api_key)
 
-  def get_latest_video(self):
-    """Checks the latest published video via RSS."""
+  def _load_prompt(self, file_path: Optional[str] = None, inline_fallback: Optional[str] = None) -> str:
+    """Loads prompt template from file, or returns inline fallback."""
+    if file_path and os.path.exists(file_path):
+      try:
+        with open(file_path, "r", encoding="utf-8") as f:
+          return f.read()
+      except Exception as e:
+        print(f"Warning: Failed to read prompt file '{file_path}': {e}")
+
+    if inline_fallback:
+      return inline_fallback
+
+    # Minimal default prompt if nothing else is available
+    return (
+        "Summarize the following YouTube transcript for the video titled"
+        " '{video_title}'.\n\nTranscript:\n{transcript}"
+    )
+
+  def get_latest_video(self, channel_id: Optional[str] = None):
+    """Checks the latest published video via RSS for the given channel_id."""
+    target_url = None
+    if channel_id:
+      target_url = self.feed_url_template.format(channel_id=channel_id)
+    elif self.rss_url:
+      target_url = self.rss_url
+    else:
+      print("Error: No channel_id or RSS URL provided.")
+      return None, None, None, None
+
     try:
-      feed = feedparser.parse(self.rss_url)
+      feed = feedparser.parse(target_url)
       if feed.entries:
         latest = feed.entries[0]
         video_id = latest.id.split(":")[-1]
         channel_title = feed.feed.get("title", "YouTube")
         return latest.link, latest.title, video_id, channel_title
     except Exception as e:
-      print(f"Error checking RSS feed: {e}")
+      print(f"Error checking RSS feed for {channel_id or target_url}: {e}")
     return None, None, None, None
 
   def get_transcript(self, video_id):
@@ -61,9 +98,10 @@ class TubeDigest:
       print(f"Unable to download transcript for {video_id}: {e}")
       return None
 
-  def summarize_transcript(self, video_title, transcript):
-    """Generates a structured summary using Gemini."""
-    prompt = self.gemini_prompt.format(video_title=video_title, transcript=transcript)
+  def summarize_transcript(self, video_title, transcript, prompt_file: Optional[str] = None):
+    """Generates a structured summary using Gemini, with optional custom prompt file."""
+    prompt_template = self._load_prompt(prompt_file) if prompt_file else self.default_prompt
+    prompt = prompt_template.format(video_title=video_title, transcript=transcript)
 
     try:
       response = self.client.models.generate_content(

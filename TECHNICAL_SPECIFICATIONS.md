@@ -25,11 +25,13 @@ The project is structured with an internal `core/` package divided into the foll
 │
 ├── config.toml              # Centralized configuration file (ignored by Git)
 ├── config.example.toml      # Configuration template with placeholder values
-├── tubedigest.py            # Main entry point / orchestrator script
-├── last_video_id.txt        # Runtime state persistence for the last processed video ID
+├── tubedigest.py            # Main entry point & CLI channel manager
+├── prompts/                 # Externalized prompt templates
+│   └── default_summary.txt  # Default Gemini summarization prompt template
 ├── /core                    # Python package for internal application modules
 │   ├── __init__.py          # Package initializer
-│   ├── state_manager.py     # StateManager module (I/O, state persistence, and logging)
+│   ├── database.py          # DatabaseManager module (SQLite channels and video archive)
+│   ├── state_manager.py     # StateManager module (filesystem I/O and logging)
 │   └── tube_digest.py       # TubeDigest module (RSS, Gemini API, SMTP email)
 ├── /transcripts             # Output directory for saving raw downloaded transcripts
 └── /logs                    # Output directory for execution logs
@@ -43,14 +45,31 @@ The project is structured with an internal `core/` package divided into the foll
 
 The configuration file must contain the following sections and keys:
 
-* `[youtube]`: `channel_id` (the 24-character YouTube Channel ID to monitor) and `feed_url_template` (RSS feed URL template containing the `{channel_id}` placeholder).
-* `[gemini]`: `api_key` (Google Gemini API key), `model` (e.g., `gemini-2.5-flash`), and `prompt` (multi-line prompt template containing `{video_title}` and `{transcript}` placeholders).
+* `[youtube]`: `feed_url_template` (RSS feed URL template containing the `{channel_id}` placeholder).
+* `[gemini]`: `api_key` (Google Gemini API key), `model` (e.g., `gemini-2.5-flash`), and `prompt_file` (path to prompt template file, e.g. `prompts/default_summary.txt`).
 * `[email]`: SMTP parameters (`sender`, `password`, `receiver`, `smtp_server`, `smtp_port`).
-* `[storage]`: File and directory paths (`last_id_file`, `logs_dir`, `transcripts_dir`, `log_file`).
+* `[storage]`: File and directory paths (`db_path`, `logs_dir`, `transcripts_dir`, `log_file`).
 
 ---
 
-### 4.2. State and Resource Management Module (`core/state_manager.py` -> `StateManager`)
+### 4.2. Database Management Module (`core/database.py` -> `DatabaseManager`)
+
+The `DatabaseManager` class encapsulates all SQLite database operations:
+
+* **Tables**:
+  * `channels`: `channel_id` (PK), `channel_name`, `prompt_file`, `is_active`, `last_checked_at`, `created_at`.
+  * `processed_videos`: `video_id` (PK), `channel_id` (FK), `video_title`, `video_url`, `transcript`, `summary_markdown`, `status`, `email_sent_at`, `created_at`.
+* **Methods**:
+  * `add_channel(channel_id, channel_name, prompt_file)`: Adds or updates a YouTube channel in SQLite.
+  * `remove_channel(channel_id)`: Deletes a channel from the database.
+  * `list_channels()`: Returns all channels for CLI display.
+  * `get_active_channels()`: Returns currently active channels for pipeline execution.
+  * `is_video_processed(video_id)`: Checks whether a video has already been processed and archived.
+  * `save_processed_video(...)`: Archives the video, transcript, and generated summary.
+
+---
+
+### 4.3. State and Logging Module (`core/state_manager.py` -> `StateManager`)
 
 The `StateManager` class handles filesystem I/O, state persistence, and logging exclusively:
 

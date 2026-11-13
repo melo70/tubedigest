@@ -1,29 +1,23 @@
 #!/usr/bin/env python3
 """
 Application: TubeDigest
-Description: Automated pipeline that monitors a YouTube channel via RSS, downloads 
-             video transcripts, generates structured summaries using the Google 
-             Gemini API, and dispatches formatted HTML email digests.
-
-Workflow Steps:
-    1. Reads configuration parameters, API keys, and paths from 'config.toml'.
-    2. Parses the target YouTube channel RSS feed to check for the latest published video.
-    3. Compares the latest video ID with the local state file to prevent duplicate processing.
-    4. Automatically downloads the video transcript (with language fallback support).
-    5. Saves a local copy of the raw transcript inside the configured transcripts directory.
-    6. Sends the transcript to the configured Google Gemini model to generate a markdown summary.
-    7. Formats the summary into an HTML email with video thumbnail and dispatches it via SMTP.
-    8. Updates the local state file with the processed video ID and writes execution logs.
+Description: Automated pipeline that monitors multiple YouTube channels via RSS,
+             stores channel definitions and processed videos in SQLite, generates
+             AI summaries with Google Gemini, and dispatches HTML email digests.
 
 Usage:
-    - Standard execution:
+    - Normal pipeline execution (e.g. via cron):
       python tubedigest.py
 
-    - Automated execution via cron (e.g., run every hour):
-      0 * * /path/to/python /path/to/tubedigest.py >> /path/to/logs/cron.log 2>&1
+    - Channel management via CLI:
+      python tubedigest.py --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_FILE>]
+      python tubedigest.py --remove-channel <CHANNEL_ID>
+      python tubedigest.py --list-channels
 """
 
 import os
+import sys
+import argparse
 
 try:
   import tomllib  # Python 3.11+
@@ -32,67 +26,201 @@ except ImportError:
 
 from core.state_manager import StateManager
 from core.tube_digest import TubeDigest
+from core.database import DatabaseManager
 
 CONFIG_FILE = "config.toml"
 
-def main():
+
+def load_config() -> dict:
+  """Loads the TOML configuration file."""
   if not os.path.exists(CONFIG_FILE):
     raise FileNotFoundError(f"Configuration file '{CONFIG_FILE}' not found!")
-
   with open(CONFIG_FILE, "rb") as f:
-    config = tomllib.load(f)
+    return tomllib.load(f)
 
-  # Initialize state manager
-  storage = config.get("storage", {})
-  state_manager = StateManager(storage)
-  
-  # Initialize main digest instance
-  digest = TubeDigest(config)
 
-  state_manager.log_message("Checking for new videos...")
-  video_url, video_title, video_id, channel_title = digest.get_latest_video()
-
-  if not video_id:
-    state_manager.log_message("No video found or feed parsing error.")
-    return
-
-  last_id = state_manager.load_last_id()
-  if video_id == last_id:
-    state_manager.log_message(
-        "No new video detected since last check."
+def handle_cli_channels(args, db: DatabaseManager) -> bool:
+  """Handles CLI channel management arguments. Returns True if a command was handled."""
+  if args.add_channel:
+    db.add_channel(
+        channel_id=args.add_channel,
+        channel_name=args.name,
+        prompt_file=args.prompt,
     )
+    name_display = f" '{args.name}'" if args.name else ""
+    prompt_display = f" with prompt '{args.prompt}'" if args.prompt else ""
+    print(f"✓ Channel{name_display} ({args.add_channel}) added/updated successfully{prompt_display}.")
+    return True
+
+  if args.remove_channel:
+    removed = db.remove_channel(args.remove_channel)
+    if removed:
+      print(f"✓ Channel '{args.remove_channel}' removed successfully.")
+    else:
+      print(f"⚠ Channel '{args.remove_channel}' not found in database.")
+    return True
+
+  if args.list_channels:
+    channels = db.list_channels()
+    if not channels:
+      print("No channels found in database.")
+      print("Add a channel using: python tubedigest.py --add-channel <CHANNEL_ID> [--name <NAME>]")
+      return True
+
+    header = f"{'Status':<10} {'Channel ID':<26} {'Name':<30} {'Prompt File'}"
+    print("\n" + "=" * len(header))
+    print("Tracked YouTube Channels (SQLite):")
+    print("-" * len(header))
+    print(header)
+    print("-" * len(header))
+    for ch in channels:
+      status = "[ACTIVE]" if ch["is_active"] else "[DISABLED]"
+      name = (ch["channel_name"] or "Unknown")[:28]
+      prompt = ch["prompt_file"] or "Default"
+      print(f"{status:<10} {ch['channel_id']:<26} {name:<30} {prompt}")
+    print("=" * len(header))
+    print(f"Total: {len(channels)} channel(s)\n")
+    return True
+
+  return False
+
+
+def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager, digest: TubeDigest):
+  """Runs the digest check for all active channels in the database."""
+  active_channels = db.get_active_channels()
+
+  # Auto-migration fallback: if DB is empty, seed from config.toml if channel_id exists
+  if not active_channels:
+    default_ch = config.get("youtube", {}).get("channel_id")
+    if default_ch:
+      state_manager.log_message(f"Seeding database with default channel from config.toml: {default_ch}")
+      db.add_channel(default_ch, channel_name="Default Channel")
+      active_channels = db.get_active_channels()
+
+  if not active_channels:
+    state_manager.log_message("No active channels configured in SQLite database.")
+    state_manager.log_message("Add a channel using: python tubedigest.py --add-channel <CHANNEL_ID> [--name <NAME>]")
     return
 
-  state_manager.log_message(
-      f"Found new video: {video_title} ({video_id})"
+  state_manager.log_message(f"Starting check for {len(active_channels)} active channel(s)...")
+
+  storage = config.get("storage", {})
+  transcripts_dir = storage.get("transcripts_dir", "transcripts")
+
+  for channel in active_channels:
+    channel_id = channel["channel_id"]
+    channel_label = channel.get("channel_name") or channel_id
+    prompt_file = channel.get("prompt_file")
+
+    state_manager.log_message(f"[{channel_label}] Checking for latest video...")
+    video_url, video_title, video_id, detected_channel_title = digest.get_latest_video(channel_id)
+
+    if not video_id:
+      state_manager.log_message(f"[{channel_label}] No video found or feed parsing error.")
+      continue
+
+    # Update channel name in DB if we now know the official title
+    if detected_channel_title and not channel.get("channel_name"):
+      db.update_channel_checked(channel_id, channel_name=detected_channel_title)
+      channel_label = detected_channel_title
+    else:
+      db.update_channel_checked(channel_id)
+
+    # Check if video was already processed
+    if db.is_video_processed(video_id):
+      state_manager.log_message(f"[{channel_label}] Latest video '{video_title}' ({video_id}) already processed.")
+      continue
+
+    state_manager.log_message(f"[{channel_label}] Found new video: {video_title} ({video_id})")
+    state_manager.log_message(f"[{channel_label}] Downloading transcript...")
+    transcript = digest.get_transcript(video_id)
+
+    if transcript:
+      # Save raw backup transcript in filesystem
+      state_manager.save_transcript(video_id, transcript)
+      state_manager.log_message(f"[{channel_label}] Transcript saved to {transcripts_dir}/{video_id}.txt")
+
+      state_manager.log_message(f"[{channel_label}] Generating summary with Gemini...")
+      sunto_markdown = digest.summarize_transcript(
+          video_title, transcript, prompt_file=prompt_file
+      )
+
+      email_subject = f"{detected_channel_title or channel_label} - {video_title}"
+      state_manager.log_message(f"[{channel_label}] Sending email...")
+      digest.send_email(email_subject, sunto_markdown, video_url, video_id)
+
+      # Archive video, transcript, and summary in SQLite
+      db.save_processed_video(
+          video_id=video_id,
+          channel_id=channel_id,
+          video_title=video_title,
+          video_url=video_url,
+          transcript=transcript,
+          summary_markdown=sunto_markdown,
+          status="COMPLETED",
+      )
+      state_manager.log_message(f"[{channel_label}] Video archived and processed successfully!")
+      state_manager.log_message("-" * 60)
+
+    else:
+      state_manager.log_message(f"[{channel_label}] Transcript not available for video ({video_id}). Archiving status.")
+      # Archive with NO_TRANSCRIPT status to avoid retrying continuously
+      db.save_processed_video(
+          video_id=video_id,
+          channel_id=channel_id,
+          video_title=video_title,
+          video_url=video_url,
+          transcript="",
+          summary_markdown="",
+          status="NO_TRANSCRIPT",
+      )
+
+
+def main():
+  parser = argparse.ArgumentParser(
+      description="TubeDigest: Automated Multi-Channel YouTube Monitor & Gemini Digest Pipeline."
+  )
+  parser.add_argument(
+      "--add-channel",
+      metavar="CHANNEL_ID",
+      help="Add or update a YouTube Channel ID to monitor in SQLite.",
+  )
+  parser.add_argument(
+      "--name",
+      metavar="CHANNEL_NAME",
+      help="Optional human-readable name for the channel (used with --add-channel).",
+  )
+  parser.add_argument(
+      "--prompt",
+      metavar="PROMPT_FILE",
+      help="Optional path to a custom prompt file for this channel (used with --add-channel).",
+  )
+  parser.add_argument(
+      "--remove-channel",
+      metavar="CHANNEL_ID",
+      help="Remove a channel from SQLite database.",
+  )
+  parser.add_argument(
+      "--list-channels",
+      action="store_true",
+      help="List all tracked channels in SQLite database.",
   )
 
-  state_manager.log_message("Downloading transcript...")
-  transcript = digest.get_transcript(video_id)
+  args = parser.parse_args()
 
-  if transcript:
-    # Save raw transcript in the configured directory
-    state_manager.save_transcript(video_id, transcript)
-    state_manager.log_message(
-        f"Transcript saved to {storage.get('transcripts_dir', 'transcripts')}/{video_id}.txt"
-    )
+  config = load_config()
+  storage = config.get("storage", {})
+  db_path = storage.get("db_path", "tubedigest.db")
+  db = DatabaseManager(db_path=db_path)
 
-    state_manager.log_message("Generating summary with Gemini...")
-    sunto_markdown = digest.summarize_transcript(video_title, transcript)
+  # If a CLI channel management command was provided, handle it and exit
+  if handle_cli_channels(args, db):
+    return
 
-    email_subject = f"{channel_title} - {video_title}"
-
-    state_manager.log_message("Sending email...")
-    digest.send_email(email_subject, sunto_markdown, video_url, video_id)
-
-    state_manager.save_last_id(video_id)
-    state_manager.log_message("Process completed successfully!")
-    state_manager.log_message("---------------------------------------------------------------")
-
-  else:
-    state_manager.log_message(
-        "Unable to proceed: transcript not available for this video."
-    )
+  # Otherwise run the automated pipeline
+  state_manager = StateManager(storage)
+  digest = TubeDigest(config)
+  run_pipeline(config, state_manager, db, digest)
 
 
 if __name__ == "__main__":

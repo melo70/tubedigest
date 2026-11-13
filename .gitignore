@@ -27,6 +27,9 @@ tubedigest.log
 transcripts/*.txt
 !transcripts/.gitkeep
 last_video_id.txt
+*.db
+*.sqlite
+*.sqlite3
 
 # ==============================================================================
 # Credenziali & File Sensibili
