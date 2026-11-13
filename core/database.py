@@ -6,7 +6,9 @@ from typing import List, Optional, Dict, Any
 class DatabaseManager:
   """Manages the SQLite database for channels and processed video archives."""
 
-  def __init__(self, db_path: str = "tubedigest.db"):
+  def __init__(self, db_path: str):
+    if not db_path:
+      raise ValueError("db_path must be specified and cannot be empty.")
     self.db_path = db_path
     db_dir = os.path.dirname(self.db_path)
     if db_dir:

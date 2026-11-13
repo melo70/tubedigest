@@ -210,7 +210,9 @@ def main():
 
   config = load_config()
   storage = config.get("storage", {})
-  db_path = storage.get("db_path", "tubedigest.db")
+  db_path = storage.get("db_path")
+  if not db_path:
+    raise KeyError("Missing required 'db_path' in [storage] configuration section.")
   db = DatabaseManager(db_path=db_path)
 
   # If a CLI channel management command was provided, handle it and exit
