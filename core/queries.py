@@ -88,6 +88,12 @@ Trascrizione:
     SELECT prompt_text FROM prompts WHERE prompt_id = ?
   """
 
+  GET_PROMPT_DETAILS = """
+    SELECT prompt_id, prompt_title, is_default, prompt_text, created_at, updated_at
+    FROM prompts
+    WHERE prompt_id = ?
+  """
+
   GET_DEFAULT_PROMPT = """
     SELECT prompt_text FROM prompts WHERE is_default = 1 LIMIT 1
   """

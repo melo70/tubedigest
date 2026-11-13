@@ -17,6 +17,7 @@ Usage:
 
     - Prompt management via CLI:
       python tubedigest.py --list-prompts
+      python tubedigest.py --show-prompt <PROMPT_ID>
 """
 
 import os
@@ -65,6 +66,32 @@ def handle_cli_channels(args, db: DatabaseManager) -> bool:
       print(f"{is_def:<9} {pid:<18} {title:<32} {updated}")
     print("=" * len(header))
     print(f"Total: {len(prompts)} prompt template(s)\n")
+    print("Tip: View full prompt text using: python tubedigest.py --show-prompt <PROMPT_ID>\n")
+    return True
+
+  if args.show_prompt:
+    prompt = db.get_prompt_details(args.show_prompt)
+    if not prompt:
+      print(f"⚠ Prompt '{args.show_prompt}' not found in database.")
+      print("List available prompts with: python tubedigest.py --list-prompts")
+      return True
+
+    is_def = "Yes (Default)" if prompt["is_default"] else "No"
+    divider = "=" * 80
+    sub_divider = "-" * 80
+
+    print("\n" + divider)
+    print(f"Prompt Template: {prompt['prompt_id']}")
+    print(divider)
+    print(f"{'ID':<14}: {prompt['prompt_id']}")
+    print(f"{'Title':<14}: {prompt['prompt_title'] or '-'}")
+    print(f"{'Is Default':<14}: {is_def}")
+    print(f"{'Updated At':<14}: {prompt.get('updated_at') or '-'}")
+    print(sub_divider)
+    print("Template Content:")
+    print(sub_divider)
+    print(prompt["prompt_text"])
+    print(divider + "\n")
     return True
 
   if args.add_channel:
@@ -231,6 +258,11 @@ def main():
       "--list-prompts",
       action="store_true",
       help="List all stored AI prompt templates in SQLite database.",
+  )
+  parser.add_argument(
+      "--show-prompt",
+      metavar="PROMPT_ID",
+      help="Display the full formatted text and details of an AI prompt template.",
   )
 
   args = parser.parse_args()

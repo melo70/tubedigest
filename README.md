@@ -130,6 +130,11 @@ python tubedigest.py --list-channels
 python tubedigest.py --list-prompts
 ```
 
+### View Full Prompt Details & Content
+```bash
+python tubedigest.py --show-prompt <PROMPT_ID>
+```
+
 ### Remove a Channel
 ```bash
 python tubedigest.py --remove-channel <CHANNEL_ID>

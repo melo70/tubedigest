@@ -68,6 +68,7 @@ Database logic is split between a dedicated SQL query repository and an operatio
   * `remove_channel(...)`: Cascading delete of a channel and associated records.
   * `list_channels()`: Returns all channels joined with author and prompt metadata.
   * `list_prompts()`: Returns all stored prompt templates.
+  * `get_prompt_details(...)`: Returns full record and template content for a prompt.
   * `get_prompt_text(...)`: Retrieves prompt text by ID or falls back to default.
   * `upsert_channel_author(...)`: Automatically updates author biographical information when detected from RSS feeds.
   * `get_active_channels()`: Returns active channels for batch processing.

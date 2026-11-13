@@ -55,6 +55,12 @@ class DatabaseManager:
       rows = conn.execute(DatabaseQueries.LIST_PROMPTS).fetchall()
       return [dict(row) for row in rows]
 
+  def get_prompt_details(self, prompt_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieves full details and text of a specific prompt."""
+    with self.get_connection() as conn:
+      row = conn.execute(DatabaseQueries.GET_PROMPT_DETAILS, (prompt_id,)).fetchone()
+      return dict(row) if row else None
+
   def get_prompt_text(self, prompt_id: Optional[str] = None) -> str:
     """Retrieves prompt text by prompt_id or falls back to the default prompt."""
     with self.get_connection() as conn:
