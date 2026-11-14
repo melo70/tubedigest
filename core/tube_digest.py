@@ -1,6 +1,7 @@
 import smtplib
 import ssl
-from typing import Optional
+import sys
+from typing import Optional, Dict, Any, Tuple
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import feedparser
@@ -11,8 +12,10 @@ from google import genai
 
 class TubeDigest:
 
-  def __init__(self, config):
+  def __init__(self, config: Dict[str, Any], state_manager=None):
     """Initializes the client and configuration parameters."""
+    self.state_manager = state_manager
+
     yt_config = config.get("youtube", {})
     self.feed_url_template = yt_config.get(
         "feed_url_template",
@@ -32,16 +35,34 @@ class TubeDigest:
 
     self.client = genai.Client(api_key=self.gemini_api_key)
 
-  def get_latest_video(self, channel_id: Optional[str] = None):
+  def _report_error(self, message: str, exc: Optional[BaseException] = None):
+    """Dispatches human-friendly message to stderr and full exception/traceback to the log file."""
+    if self.state_manager:
+      self.state_manager.log_error(message, exc=exc)
+    else:
+      print(f"⚠ {message}", file=sys.stderr)
+
+  def get_latest_video(
+      self, channel_id: Optional[str] = None
+  ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[Dict[str, str]]]:
     """Checks the latest published video via RSS for the given channel_id."""
     if not channel_id:
-      print("Error: No channel_id provided.")
+      self._report_error("No channel ID provided for checking RSS feed.")
       return None, None, None, None, None
 
     target_url = self.feed_url_template.format(channel_id=channel_id)
 
     try:
       feed = feedparser.parse(target_url)
+
+      # Catch network errors or XML parsing failures detected by feedparser
+      if getattr(feed, "bozo", 0) and getattr(feed, "bozo_exception", None) and not feed.entries:
+        self._report_error(
+            f"Could not retrieve RSS feed for channel '{channel_id}'. Check network connection or channel ID.",
+            exc=feed.bozo_exception,
+        )
+        return None, None, None, None, None
+
       channel_title = feed.feed.get("title", "YouTube")
       author_detail = feed.feed.get("author_detail", {})
       author_name = feed.feed.get("author") or author_detail.get("name") or channel_title
@@ -58,10 +79,13 @@ class TubeDigest:
         return latest.link, latest.title, video_id, channel_title, author_info
       return None, None, None, channel_title, author_info
     except Exception as e:
-      print(f"Error checking RSS feed for {channel_id}: {e}")
+      self._report_error(
+          f"Could not retrieve RSS feed for channel '{channel_id}'. Check network connection or channel ID.",
+          exc=e,
+      )
     return None, None, None, None, None
 
-  def get_transcript(self, video_id):
+  def get_transcript(self, video_id: str) -> Optional[str]:
     """Downloads the video transcript using the object-based API."""
     try:
       ytt_api = YouTubeTranscriptApi()
@@ -71,12 +95,15 @@ class TubeDigest:
       full_text = " ".join([snippet.text for snippet in fetched_data])
       return full_text
     except Exception as e:
-      print(f"Unable to download transcript for {video_id}: {e}")
+      self._report_error(
+          f"Could not retrieve transcript for video '{video_id}'. The video may lack captions or subtitles.",
+          exc=e,
+      )
       return None
 
   def summarize_transcript(
       self, video_title: str, transcript: str, prompt_template: Optional[str] = None
-  ):
+  ) -> Optional[str]:
     """Generates a structured summary using Gemini, with prompt template from database."""
     template = prompt_template or (
         "Summarize the following YouTube transcript for the video titled"
@@ -91,10 +118,13 @@ class TubeDigest:
       )
       return response.text
     except Exception as e:
-      print(f"Error generating summary with Gemini: {e}")
-      return "Error generating summary."
+      self._report_error(
+          f"Gemini AI summarization failed for '{video_title}'. Please check API key, model, or quota.",
+          exc=e,
+      )
+      return None
 
-  def send_email(self, subject, markdown_content, video_url, video_id):
+  def send_email(self, subject: str, markdown_content: str, video_url: str, video_id: str) -> bool:
     """Sends a formatted HTML email with thumbnail and video link."""
     try:
       html_body = markdown.markdown(
@@ -153,7 +183,15 @@ class TubeDigest:
       server.sendmail(self.sender, self.receiver, msg.as_string())
       server.quit()
 
-      print("Email sent successfully!")
-      
+      if self.state_manager:
+        self.state_manager.log_message(f"Email digest sent successfully for '{subject}'.")
+      else:
+        print(f"Email digest sent successfully for '{subject}'.")
+      return True
+
     except Exception as e:
-      print(f"Error sending email: {e}")
+      self._report_error(
+          f"Failed to send email digest for '{subject}'. Check SMTP credentials and network connection.",
+          exc=e,
+      )
+      return False

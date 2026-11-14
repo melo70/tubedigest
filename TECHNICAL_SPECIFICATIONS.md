@@ -79,10 +79,11 @@ Database logic is split between a dedicated SQL query repository and an operatio
 
 ### 4.3. Logging Module (`core/state_manager.py` -> `StateManager`)
 
-The `StateManager` class handles application execution logging with automatic rotation and banner headers:
+The `StateManager` class handles application execution logging with automatic rotation, level-based formatting, and ASCII art banner headers:
 
 * **Initialization (`__init__`)**: Reads storage configuration, configures `BannerRotatingFileHandler` with configurable `max_bytes` and `backup_count`, and ensures new log files start with an ASCII art header banner.
-* **`log_message(message)`**: Prints the message to stdout and appends it to the rotated log file (e.g., `logs/tubedigest.log`) prefixed with a formatted timestamp (`%Y-%m-%d %H:%M:%S`).
+* **`log_message(message)`**: Prints informational message to stdout and appends it to the rotated log file (e.g., `logs/tubedigest.log`) formatted as `[timestamp] [INFO] message`.
+* **`log_error(message, exc=None)`**: Prints a user-friendly warning (`⚠ message`) to `stderr` and records technical error details and full stack trace (`exc_info=exc`) to the log file formatted as `[timestamp] [ERROR] message - Exception: ...`.
 
 ---
 
@@ -90,39 +91,24 @@ The `StateManager` class handles application execution logging with automatic ro
 
 The `TubeDigest` class encapsulates all interactions with external services:
 
-* **Initialization (`__init__`)**: Receives the complete configuration dictionary, constructs the RSS feed URL from the template and channel ID, initializes the Google GenAI client (`genai.Client(api_key=...)`), sets the target Gemini model, SMTP credentials, and summarization prompt template.
-* **`get_latest_video()`**: Parses the YouTube RSS feed using `feedparser`. Extracts the latest published video by retrieving its unique ID from the Atom ID string (`latest.id.split(":")[-1]`), returning `link`, `title`, `video_id`, and `channel_title`. Gracefully catches exceptions, returning tuples of `None` on errors.
-* **`get_transcript(video_id)`**: Extracts the text transcript using `youtube_transcript_api` with validated object-based syntax:
-
-```python
-ytt_api = YouTubeTranscriptApi()
-fetched_data = ytt_api.fetch(video_id, languages=["it", "en"])
-full_text = " ".join([snippet.text for snippet in fetched_data])
-return full_text
-```
-
-Catches exceptions (`try-except`) and returns `None` if no transcript is available.
-
-* **`summarize_transcript(video_title, transcript)`**: Formats the prompt by dynamically injecting `video_title` and `transcript` into the template configured in TOML. Submits the request to the Gemini model using the SDK client (`client.models.generate_content`) and returns the generated Markdown response text.
-* **`send_email(subject, markdown_content, video_url, video_id)`**: Converts Markdown content into HTML using the `markdown` library (with `extra` and `nl2br` extensions). Builds a multipart email message (`MIMEMultipart("alternative")`) embedding the YouTube video preview thumbnail (`https://img.youtube.com/vi/{video_id}/hqdefault.jpg`), and transmits the email through the secure SMTP server using STARTTLS with custom SSL context handling.
+* **Initialization (`__init__`)**: Receives the complete configuration dictionary and optional `StateManager` instance. Initializes the Google GenAI client (`genai.Client(api_key=...)`), sets the target Gemini model, SMTP credentials, and RSS template.
+* **`_report_error(message, exc=None)`**: Dispatches user-friendly alerts to the terminal while recording complete tracebacks via `state_manager.log_error()`.
+* **`get_latest_video()`**: Parses the YouTube RSS feed using `feedparser`. Detects feed/parsing failures via `feed.bozo` and `feed.bozo_exception`. Extracts the latest published video (`video_id`, `video_title`, `channel_title`, `author_info`). Returns `None` tuples upon failure without crashing.
+* **`get_transcript(video_id)`**: Extracts the text transcript using `youtube_transcript_api`. Catches exceptions (`TranscriptsDisabled`, `NoTranscriptFound`, network drops), logs the stack trace to the log file, and returns `None`.
+* **`summarize_transcript(video_title, transcript, prompt_template)`**: Injects `video_title` and `transcript` into the template loaded from SQLite. Submits request via `client.models.generate_content`. If an API or quota error occurs, records the traceback and returns `None` so the video is safely retried on subsequent runs.
+* **`send_email(subject, markdown_content, video_url, video_id)`**: Converts Markdown content into HTML using `markdown`. Embeds the YouTube thumbnail (`https://img.youtube.com/vi/{video_id}/hqdefault.jpg`) and transmits the email via authenticated STARTTLS SMTP. Returns `True` on success and `False` on failure, preventing incomplete states from being marked as completed.
 
 ---
 
-### 4.4. Main Orchestrator Script (`tubedigest.py`)
+### 4.5. Main Orchestrator Script (`tubedigest.py`)
 
-The main entry point imports components from the internal package (`from core.state_manager import StateManager` and `from core.tube_digest import TubeDigest`) and coordinates the execution flow:
+The main entry point coordinates CLI management and pipeline execution:
 
-1. Verifies the existence of `config.toml`.
-2. Loads configuration parameters (using native `tomllib` in Python 3.11+, with fallback to `tomli`).
-3. Instantiates `StateManager` and `TubeDigest`.
-4. Executes the pipeline step-by-step, logging every stage via `state_manager.log_message()`:
-   * Checks the YouTube RSS feed for the latest video.
-   * Compares the video ID against the persisted state (`load_last_id()`). Exits cleanly if IDs match (no new video to process).
-   * Downloads the video transcript (`get_transcript()`).
-   * Saves a local copy of the raw transcript (`save_transcript()`).
-   * Generates the structured summary with Gemini (`summarize_transcript()`).
-   * Sends the HTML email digest (`send_email()`).
-   * Updates the persistent state file (`save_last_id()`).
+1. **Global Exception Interception (`sys.excepthook`)**: Captures unhandled crashes globally. Prevents terminal clutter by displaying polite error summaries on screen while logging complete diagnostic tracebacks as `[CRITICAL]` in `logs/tubedigest.log`.
+2. **Early State & Logging Setup**: Loads `config.toml` and initializes `StateManager` so all subsequent operations are traced.
+3. **Database Setup**: Connects to SQLite (`DatabaseManager`), handling channel and prompt migrations.
+4. **CLI Handler**: Processes `--add-channel`, `--remove-channel`, `--list-channels`, `--list-prompts`, and `--show-prompt` arguments.
+5. **Automated Pipeline**: Iterates through active channels, detecting new uploads, transcribing subtitles, prompting Gemini, delivering HTML emails, and persisting state into SQLite archives.
 
 ---
 

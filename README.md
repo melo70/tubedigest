@@ -21,6 +21,7 @@ It continuously monitors multiple YouTube channels via RSS feeds, downloads new 
 * **Built-in SQLite Storage**: Saves channel authors, prompts, transcripts, generated summaries, and channel states in a local SQLite database (`data/tubedigest.db`)—avoiding re-processing and saving AI tokens.
 * **Separated Query Architecture**: All SQL statements reside in a dedicated `DatabaseQueries` class for clean maintainability.
 * **Rich HTML Email Digests**: Delivers clean, responsive emails with video thumbnails, key takeaways in Markdown format, and direct YouTube links.
+* **Resilient Logging & Friendly CLI**: Clean, human-friendly messages on terminal with all technical exceptions and stack traces routed cleanly to rotated log files (`logs/tubedigest.log`).
 * **Headless & Cron-Ready**: Built for automated background execution on home servers, Linux VPS, or Raspberry Pi boards.
 
 ---
@@ -173,6 +174,16 @@ To monitor channels automatically in the background, set up a `cron` job on your
    0 */2 * * * cd /path/to/tubedigest && /path/to/tubedigest/.venv/bin/python tubedigest.py >> /path/to/tubedigest/logs/cron.log 2>&1
    ```
    *(Make sure to replace `/path/to/tubedigest` with the actual absolute path to your project).*
+
+---
+
+## 📝 Logging & Exception Handling
+
+TubeDigest is engineered for automated, unattended operation:
+* **Terminal Output**: Keeps the terminal uncluttered by displaying only clear, human-friendly status and warning messages (prefixed with `⚠`).
+* **Technical Log File (`logs/tubedigest.log`)**: All internal exceptions, network errors, and complete Python stack traces are automatically routed to the rotating log file with ISO timestamps and log levels (`[INFO]`, `[ERROR]`, `[CRITICAL]`).
+* **Global Exception Hook**: Any unexpected system-level error or unhandled crash is captured by `sys.excepthook`, recording the full diagnostic traceback in the log file while presenting a polite summary on screen.
+* **Automatic Log Rotation**: Rotates automatically upon reaching `log_max_bytes` (preserving `log_backup_count` historical files) and prints an ASCII art banner header at the top of every new log file.
 
 ---
 

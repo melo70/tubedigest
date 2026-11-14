@@ -1,8 +1,9 @@
 import os
+import sys
 import datetime
 import logging
 from logging.handlers import RotatingFileHandler
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 ASCII_BANNER = r"""================================================================================
  _____      _            ____  _                 _   
@@ -61,7 +62,7 @@ class StateManager:
           encoding="utf-8",
       )
       formatter = logging.Formatter(
-          "[%(asctime)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+          "[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
       )
       file_handler.setFormatter(formatter)
       self.logger.addHandler(file_handler)
@@ -74,6 +75,14 @@ class StateManager:
       f.write(header)
 
   def log_message(self, message: str):
-    """Writes a log message to stdout and appends it to the rotated log file."""
+    """Writes an informational message to stdout and appends it to the rotated log file."""
     print(message)
     self.logger.info(message)
+
+  def log_error(self, message: str, exc: Optional[BaseException] = None):
+    """Prints a friendly error message to stderr and logs technical details with traceback to file."""
+    print(f"⚠ {message}", file=sys.stderr)
+    if exc:
+      self.logger.error(f"{message} - Exception: {exc}", exc_info=exc)
+    else:
+      self.logger.error(message)

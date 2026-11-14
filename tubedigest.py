@@ -23,6 +23,9 @@ Usage:
 import os
 import sys
 import argparse
+import datetime
+import traceback
+from typing import Optional
 
 try:
   import tomllib  # Python 3.11+
@@ -34,12 +37,55 @@ from core.tube_digest import TubeDigest
 from core.database import DatabaseManager
 
 CONFIG_FILE = "config.toml"
+_ACTIVE_STATE_MANAGER: Optional[StateManager] = None
+
+
+def global_exception_handler(exc_type, exc_value, exc_tb):
+  """Intercepts uncaught exceptions globally, writing tracebacks to log file and clean messages to terminal."""
+  if issubclass(exc_type, KeyboardInterrupt):
+    sys.__excepthook__(exc_type, exc_value, exc_tb)
+    return
+
+  # Format human-friendly error details
+  error_summary = f"{exc_type.__name__}: {exc_value}" if str(exc_value) else exc_type.__name__
+
+  if _ACTIVE_STATE_MANAGER and _ACTIVE_STATE_MANAGER.logger:
+    _ACTIVE_STATE_MANAGER.logger.critical(
+        f"Uncaught exception encountered: {error_summary}",
+        exc_info=(exc_type, exc_value, exc_tb),
+    )
+  else:
+    # Direct file fallback if exception occurred before StateManager initialization
+    try:
+      os.makedirs("logs", exist_ok=True)
+      with open("logs/tubedigest.log", "a", encoding="utf-8") as f:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        f.write(
+            f"[{timestamp}] [CRITICAL] Uncaught exception before StateManager initialization:\n"
+        )
+        traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+    except Exception:
+      pass
+
+  print(
+      "\n⚠ An unexpected error occurred while executing TubeDigest.",
+      file=sys.stderr,
+  )
+  print(f"  Reason: {error_summary}", file=sys.stderr)
+  print(
+      "  Full technical details and traceback have been recorded in the log file (logs/tubedigest.log).\n",
+      file=sys.stderr,
+  )
+
+
+# Set global exception hook immediately on load
+sys.excepthook = global_exception_handler
 
 
 def load_config() -> dict:
   """Loads the TOML configuration file."""
   if not os.path.exists(CONFIG_FILE):
-    raise FileNotFoundError(f"Configuration file '{CONFIG_FILE}' not found!")
+    raise FileNotFoundError(f"Configuration file '{CONFIG_FILE}' not found! Please create it from 'config.example.toml'.")
   with open(CONFIG_FILE, "rb") as f:
     return tomllib.load(f)
 
@@ -168,7 +214,7 @@ def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager,
       )
 
     if not video_id:
-      state_manager.log_message(f"[{channel_label}] No video found or feed parsing error.")
+      state_manager.log_message(f"[{channel_label}] No new video found to process.")
       continue
 
     # Update channel name in DB if we now know the official title
@@ -194,9 +240,17 @@ def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager,
           video_title, transcript, prompt_template=prompt_template
       )
 
+      if not sunto_markdown:
+        state_manager.log_message(f"[{channel_label}] Summarization failed; skipping email dispatch and archive. Will retry on next run.")
+        continue
+
       email_subject = f"{detected_channel_title or channel_label} - {video_title}"
       state_manager.log_message(f"[{channel_label}] Sending email...")
-      digest.send_email(email_subject, sunto_markdown, video_url, video_id)
+      email_sent = digest.send_email(email_subject, sunto_markdown, video_url, video_id)
+
+      if not email_sent:
+        state_manager.log_message(f"[{channel_label}] Email dispatch failed; video not marked completed so it can be retried.")
+        continue
 
       # Archive video, transcript, and summary in SQLite
       db.save_processed_video(
@@ -226,6 +280,9 @@ def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager,
 
 
 def main():
+  global _ACTIVE_STATE_MANAGER
+  sys.excepthook = global_exception_handler
+
   parser = argparse.ArgumentParser(
       description="TubeDigest: Automated Multi-Channel YouTube Monitor & Gemini Digest Pipeline."
   )
@@ -269,6 +326,11 @@ def main():
 
   config = load_config()
   storage = config.get("storage", {})
+
+  # Initialize StateManager early so all pipeline operations and errors are logged
+  state_manager = StateManager(storage)
+  _ACTIVE_STATE_MANAGER = state_manager
+
   db_path = storage.get("db_path")
   if not db_path:
     raise KeyError("Missing required 'db_path' in [storage] configuration section.")
@@ -279,8 +341,7 @@ def main():
     return
 
   # Otherwise run the automated pipeline
-  state_manager = StateManager(storage)
-  digest = TubeDigest(config)
+  digest = TubeDigest(config, state_manager=state_manager)
   run_pipeline(config, state_manager, db, digest)
 
 
