@@ -161,6 +161,31 @@ class DatabaseManager:
 
       return None
 
+  def find_channel_for_video(
+      self, channel_id: Optional[str] = None, author_name: Optional[str] = None
+  ) -> Optional[Dict[str, Any]]:
+    """Locates a tracked channel matching the given channel_id, channel_name, or author_name."""
+    if channel_id:
+      ch = self.get_channel(channel_id)
+      if ch:
+        return ch
+
+    if author_name:
+      ch = self.get_channel(author_name)
+      if ch:
+        return ch
+
+      # Also search inside channel_authors table directly
+      with self.get_connection() as conn:
+        row = conn.execute(
+            DatabaseQueries.FIND_CHANNEL_BY_AUTHOR,
+            (author_name, author_name),
+        ).fetchone()
+        if row:
+          return dict(row)
+
+    return None
+
   def set_channel_active(
       self, identifier: str, is_active: bool
   ) -> Optional[Dict[str, Any]]:

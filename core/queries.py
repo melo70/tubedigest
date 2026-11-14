@@ -140,6 +140,15 @@ Trascrizione:
     LIMIT 1
   """
 
+  FIND_CHANNEL_BY_AUTHOR = """
+    SELECT c.channel_id, c.channel_name, c.prompt_id, c.is_active
+    FROM channels c
+    JOIN channel_authors a ON c.channel_id = a.channel_id
+    WHERE LOWER(a.author_name) = LOWER(?) 
+       OR LOWER(a.channel_title) = LOWER(?)
+    LIMIT 1
+  """
+
   COUNT_CHANNEL_VIDEOS = """
     SELECT COUNT(*) FROM processed_videos WHERE channel_id = ?
   """

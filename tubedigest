@@ -13,6 +13,9 @@ Usage:
     - One-shot check for a specific channel in database:
       ./tubedigest --channel <CHANNEL_ID_OR_NAME>
 
+    - Process a specific YouTube video (by ID or full URL):
+      ./tubedigest --video <VIDEO_ID_OR_URL>
+
     - Channel management via CLI:
       ./tubedigest --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
       ./tubedigest --disable-channel <CHANNEL_ID_OR_NAME>
@@ -36,6 +39,7 @@ if sys.prefix == sys.base_prefix and os.path.exists(_VENV_PYTHON):
 
 import argparse
 import datetime
+import re
 import traceback
 from typing import Optional
 
@@ -100,6 +104,23 @@ def load_config() -> dict:
     raise FileNotFoundError(f"Configuration file '{CONFIG_FILE}' not found! Please create it from 'config.example.toml'.")
   with open(CONFIG_FILE, "rb") as f:
     return tomllib.load(f)
+
+
+def extract_video_id(video_input: str) -> Optional[str]:
+  """Extracts an 11-character YouTube video ID from a raw ID or full YouTube URL."""
+  if not video_input:
+    return None
+  val = video_input.strip()
+  if re.match(r"^[a-zA-Z0-9_-]{11}$", val):
+    return val
+  patterns = [
+      r"(?:v=|\/v\/|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})",
+  ]
+  for p in patterns:
+    m = re.search(p, val)
+    if m:
+      return m.group(1)
+  return None
 
 
 def handle_cli_channels(
@@ -278,7 +299,157 @@ def handle_cli_channels(
     state_manager.log_message("\n".join(lines))
     return True
 
+  if args.video:
+    video_id = extract_video_id(args.video)
+    if not video_id:
+      state_manager.log_error(
+          f"Invalid YouTube video identifier '{args.video}'. Please provide an 11-character Video ID or a valid YouTube URL."
+      )
+      return True
+
+    state_manager.log_message(f"Resolving YouTube metadata for video '{video_id}'...")
+    meta = digest.get_video_details(video_id) if digest else None
+    if not meta:
+      state_manager.log_error(f"Could not retrieve video details for '{video_id}'. Please check your network connection.")
+      return True
+
+    v_title = meta.get("video_title") or f"YouTube Video ({video_id})"
+    v_url = meta.get("video_url") or f"https://www.youtube.com/watch?v={video_id}"
+    v_channel_id = meta.get("channel_id")
+    v_author = meta.get("author_name")
+
+    # Verify if the author/channel is tracked in our SQLite database
+    channel = db.find_channel_for_video(channel_id=v_channel_id, author_name=v_author)
+    if not channel:
+      author_desc = f"channel '{v_author or v_channel_id or 'Unknown'}'"
+      if v_channel_id and v_author:
+        author_desc += f" ({v_channel_id})"
+      state_manager.log_error(
+          f"Video '{v_title}' ({video_id}) belongs to {author_desc}, which is not present in your tracked channels list."
+      )
+      state_manager.log_message("Add this channel first using: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]")
+      return True
+
+    ch_label = channel.get("channel_name") or channel["channel_id"]
+    if not channel.get("is_active", 1):
+      state_manager.log_message(
+          f"Notice: Channel '{ch_label}' is marked [DISABLED] in SQLite. Proceeding with explicit single-video processing..."
+      )
+
+    author_info = {
+        "author_name": v_author or ch_label,
+        "author_url": meta.get("author_url") or f"https://www.youtube.com/channel/{channel['channel_id']}",
+        "channel_title": ch_label,
+    }
+    process_single_video(
+        video_id=video_id,
+        video_title=v_title,
+        video_url=v_url,
+        channel=channel,
+        digest=digest,
+        db=db,
+        state_manager=state_manager,
+        author_info=author_info,
+        detected_channel_title=ch_label,
+    )
+    return True
+
   return False
+
+
+def process_single_video(
+    video_id: str,
+    video_title: str,
+    video_url: str,
+    channel: dict,
+    digest: TubeDigest,
+    db: DatabaseManager,
+    state_manager: StateManager,
+    author_info: Optional[dict] = None,
+    detected_channel_title: Optional[str] = None,
+) -> bool:
+  """Processes a single video: checks archive, fetches transcript, summarizes, emails, and archives."""
+  channel_id = channel["channel_id"]
+  channel_label = detected_channel_title or channel.get("channel_name") or channel_id
+  prompt_id = channel.get("prompt_id") or "default"
+
+  # Persist or update author metadata if detected
+  if author_info and (author_info.get("author_name") or detected_channel_title):
+    db.upsert_channel_author(
+        channel_id=channel_id,
+        author_name=author_info.get("author_name"),
+        author_url=author_info.get("author_url"),
+        channel_title=detected_channel_title,
+    )
+
+  # Update channel name in DB if official title was discovered
+  if detected_channel_title and not channel.get("channel_name"):
+    db.update_channel_checked(channel_id, channel_name=detected_channel_title)
+    channel_label = detected_channel_title
+  else:
+    db.update_channel_checked(channel_id)
+
+  # Check if video was already processed
+  if db.is_video_processed(video_id):
+    state_manager.log_message(
+        f"[{channel_label}] Video '{video_title}' ({video_id}) already processed."
+    )
+    return True
+
+  state_manager.log_message(f"[{channel_label}] Found new video: {video_title} ({video_id})")
+  state_manager.log_message(f"[{channel_label}] Downloading transcript...")
+  transcript = digest.get_transcript(video_id)
+
+  if transcript:
+    state_manager.log_message(f"[{channel_label}] Generating summary with Gemini (Prompt: {prompt_id})...")
+    prompt_template = db.get_prompt_text(prompt_id)
+    sunto_markdown = digest.summarize_transcript(
+        video_title, transcript, prompt_template=prompt_template
+    )
+
+    if not sunto_markdown:
+      state_manager.log_message(
+          f"[{channel_label}] Summarization failed; skipping email dispatch and archive. Will retry on next run."
+      )
+      return False
+
+    email_subject = f"{detected_channel_title or channel_label} - {video_title}"
+    state_manager.log_message(f"[{channel_label}] Sending email...")
+    email_sent = digest.send_email(email_subject, sunto_markdown, video_url, video_id)
+
+    if not email_sent:
+      state_manager.log_message(
+          f"[{channel_label}] Email dispatch failed; video not marked completed so it can be retried."
+      )
+      return False
+
+    # Archive video, transcript, and summary in SQLite
+    db.save_processed_video(
+        video_id=video_id,
+        channel_id=channel_id,
+        video_title=video_title,
+        video_url=video_url,
+        transcript=transcript,
+        summary_markdown=sunto_markdown,
+        status="COMPLETED",
+    )
+    state_manager.log_message(f"[{channel_label}] Video archived and processed successfully!")
+    state_manager.log_message("-" * 60)
+    return True
+  else:
+    state_manager.log_message(
+        f"[{channel_label}] Transcript not available for video ({video_id}). Archiving status."
+    )
+    db.save_processed_video(
+        video_id=video_id,
+        channel_id=channel_id,
+        video_title=video_title,
+        video_url=video_url,
+        transcript="",
+        summary_markdown="",
+        status="NO_TRANSCRIPT",
+    )
+    return True
 
 
 def run_pipeline(
@@ -314,84 +485,25 @@ def run_pipeline(
   for channel in active_channels:
     channel_id = channel["channel_id"]
     channel_label = channel.get("channel_name") or channel_id
-    prompt_id = channel.get("prompt_id") or "default"
 
     state_manager.log_message(f"[{channel_label}] Checking for latest video...")
     video_url, video_title, video_id, detected_channel_title, author_info = digest.get_latest_video(channel_id)
-
-    # Persist or update author metadata if detected from RSS
-    if author_info and (author_info.get("author_name") or detected_channel_title):
-      db.upsert_channel_author(
-          channel_id=channel_id,
-          author_name=author_info.get("author_name"),
-          author_url=author_info.get("author_url"),
-          channel_title=detected_channel_title,
-      )
 
     if not video_id:
       state_manager.log_message(f"[{channel_label}] No new video found to process.")
       continue
 
-    # Update channel name in DB if we now know the official title
-    if detected_channel_title and not channel.get("channel_name"):
-      db.update_channel_checked(channel_id, channel_name=detected_channel_title)
-      channel_label = detected_channel_title
-    else:
-      db.update_channel_checked(channel_id)
-
-    # Check if video was already processed
-    if db.is_video_processed(video_id):
-      state_manager.log_message(f"[{channel_label}] Latest video '{video_title}' ({video_id}) already processed.")
-      continue
-
-    state_manager.log_message(f"[{channel_label}] Found new video: {video_title} ({video_id})")
-    state_manager.log_message(f"[{channel_label}] Downloading transcript...")
-    transcript = digest.get_transcript(video_id)
-
-    if transcript:
-      state_manager.log_message(f"[{channel_label}] Generating summary with Gemini (Prompt: {prompt_id})...")
-      prompt_template = db.get_prompt_text(prompt_id)
-      sunto_markdown = digest.summarize_transcript(
-          video_title, transcript, prompt_template=prompt_template
-      )
-
-      if not sunto_markdown:
-        state_manager.log_message(f"[{channel_label}] Summarization failed; skipping email dispatch and archive. Will retry on next run.")
-        continue
-
-      email_subject = f"{detected_channel_title or channel_label} - {video_title}"
-      state_manager.log_message(f"[{channel_label}] Sending email...")
-      email_sent = digest.send_email(email_subject, sunto_markdown, video_url, video_id)
-
-      if not email_sent:
-        state_manager.log_message(f"[{channel_label}] Email dispatch failed; video not marked completed so it can be retried.")
-        continue
-
-      # Archive video, transcript, and summary in SQLite
-      db.save_processed_video(
-          video_id=video_id,
-          channel_id=channel_id,
-          video_title=video_title,
-          video_url=video_url,
-          transcript=transcript,
-          summary_markdown=sunto_markdown,
-          status="COMPLETED",
-      )
-      state_manager.log_message(f"[{channel_label}] Video archived and processed successfully!")
-      state_manager.log_message("-" * 60)
-
-    else:
-      state_manager.log_message(f"[{channel_label}] Transcript not available for video ({video_id}). Archiving status.")
-      # Archive with NO_TRANSCRIPT status to avoid retrying continuously
-      db.save_processed_video(
-          video_id=video_id,
-          channel_id=channel_id,
-          video_title=video_title,
-          video_url=video_url,
-          transcript="",
-          summary_markdown="",
-          status="NO_TRANSCRIPT",
-      )
+    process_single_video(
+        video_id=video_id,
+        video_title=video_title,
+        video_url=video_url,
+        channel=channel,
+        digest=digest,
+        db=db,
+        state_manager=state_manager,
+        author_info=author_info,
+        detected_channel_title=detected_channel_title,
+    )
 
 
 def main():
@@ -423,6 +535,13 @@ def main():
       dest="target_channel",
       metavar="CHANNEL",
       help="Run one-shot pipeline check only for the specified channel (by ID or Name) in SQLite.",
+  )
+  parser.add_argument(
+      "--video",
+      "-v",
+      dest="video",
+      metavar="VIDEO",
+      help="Process a specific YouTube video (by ID or full URL). Verifies channel ownership against SQLite before processing.",
   )
   parser.add_argument(
       "--disable-channel",

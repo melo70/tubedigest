@@ -1,6 +1,9 @@
+import json
+import re
 import smtplib
 import ssl
 import sys
+import urllib.request
 from typing import Optional, Dict, Any, Tuple
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -74,6 +77,76 @@ class TubeDigest:
           exc=e,
       )
       return None
+
+  def get_video_details(self, video_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieves metadata (channel_id, title, author_name) for a specific YouTube video."""
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9,it;q=0.8",
+    }
+
+    title = None
+    channel_id = None
+    author_name = None
+    author_url = None
+
+    # 1. Query standard public oEmbed endpoint for title and author info
+    oembed_url = f"https://www.youtube.com/oembed?url={video_url}&format=json"
+    try:
+      req = urllib.request.Request(oembed_url, headers=headers)
+      with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+        title = data.get("title")
+        author_name = data.get("author_name")
+        author_url = data.get("author_url", "")
+        if "/channel/" in author_url:
+          channel_id = author_url.split("/channel/")[-1].split("/")[0].split("?")[0]
+    except Exception as e:
+      self._report_error(f"oEmbed metadata lookup failed for video '{video_id}'.", exc=e)
+
+    # 2. If channel_id is not yet resolved, inspect watch page HTML headers
+    if not channel_id:
+      try:
+        req = urllib.request.Request(video_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+          html_chunk = resp.read(262144).decode("utf-8", errors="replace")
+
+          ch_match = re.search(r'itemprop=["\']channelId["\']\s+content=["\']([^"\']+)["\']', html_chunk)
+          if not ch_match:
+            ch_match = re.search(r'content=["\']([^"\']+)["\']\s+itemprop=["\']channelId["\']', html_chunk)
+          if not ch_match:
+            ch_match = re.search(r'"channelId"\s*:\s*["\'](UC[a-zA-Z0-9_-]{22})["\']', html_chunk)
+          if ch_match:
+            channel_id = ch_match.group(1)
+
+          if not title:
+            t_match = re.search(r'<meta\s+property=["\']og:title["\']\s+content=["\']([^"\']+)["\']', html_chunk)
+            if t_match:
+              title = t_match.group(1)
+
+          if not author_name:
+            a_match = re.search(r'<link\s+itemprop=["\']name["\']\s+content=["\']([^"\']+)["\']', html_chunk)
+            if a_match:
+              author_name = a_match.group(1)
+      except Exception as e:
+        self._report_error(f"Watch page lookup failed for video '{video_id}'.", exc=e)
+
+    if not title:
+      title = f"YouTube Video ({video_id})"
+
+    return {
+        "video_id": video_id,
+        "video_url": video_url,
+        "video_title": title,
+        "channel_id": channel_id,
+        "author_name": author_name,
+        "author_url": author_url or (f"https://www.youtube.com/channel/{channel_id}" if channel_id else None),
+    }
 
   def get_latest_video(
       self, channel_id: Optional[str] = None
