@@ -97,20 +97,22 @@ class DatabaseManager:
 
     return DatabaseQueries.DEFAULT_PROMPT_TEXT
 
-  def get_email_template(self, prompt_id: Optional[str] = None) -> str:
-    """Retrieves email HTML template by prompt_id or falls back to default."""
+  def get_email_template(self, prompt_id: Optional[str] = None) -> Optional[str]:
+    """Retrieves email HTML template for the given prompt_id, or None if not configured."""
     with self.get_connection() as conn:
       if prompt_id:
         row = conn.execute(DatabaseQueries.GET_PROMPT_DETAILS, (prompt_id,)).fetchone()
-        if row and row["email_template"]:
-          return row["email_template"]
+        if row:
+          val = row["email_template"]
+          return val if val and val.strip() else None
 
-      # Fallback to default prompt
+      # If no specific prompt was specified, check default prompt
       default_row = conn.execute(DatabaseQueries.GET_DEFAULT_PROMPT).fetchone()
-      if default_row and default_row["email_template"]:
-        return default_row["email_template"]
+      if default_row:
+        val = default_row["email_template"]
+        return val if val and val.strip() else None
 
-    return DatabaseQueries.DEFAULT_EMAIL_TEMPLATE
+    return None
 
   def upsert_prompt(
       self,
@@ -331,12 +333,42 @@ class DatabaseManager:
   # Video Archive Operations
   # ----------------------------------------------------------------------------
   def is_video_processed(self, video_id: str) -> bool:
-    """Checks whether a video ID has already been processed."""
+    """Checks whether a video ID has already been fully completed."""
     with self.get_connection() as conn:
       row = conn.execute(
           DatabaseQueries.IS_VIDEO_PROCESSED, (video_id,)
       ).fetchone()
       return row is not None
+
+  def get_processed_video(self, video_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieves full archive record for a video by its video_id."""
+    with self.get_connection() as conn:
+      row = conn.execute(
+          DatabaseQueries.GET_PROCESSED_VIDEO, (video_id,)
+      ).fetchone()
+      return dict(row) if row else None
+
+  def get_pending_email_videos(
+      self, channel_id: Optional[str] = None
+  ) -> List[Dict[str, Any]]:
+    """Retrieves all videos awaiting email dispatch, optionally filtered by channel_id."""
+    with self.get_connection() as conn:
+      if channel_id:
+        rows = conn.execute(
+            DatabaseQueries.GET_PENDING_EMAIL_VIDEOS, (channel_id,)
+        ).fetchall()
+      else:
+        rows = conn.execute(
+            DatabaseQueries.GET_ALL_PENDING_EMAIL_VIDEOS
+        ).fetchall()
+      return [dict(row) for row in rows]
+
+  def mark_video_completed(self, video_id: str) -> bool:
+    """Marks a pending video as COMPLETED and timestamps its email dispatch."""
+    with self.get_connection() as conn:
+      cur = conn.execute(DatabaseQueries.MARK_VIDEO_COMPLETED, (video_id,))
+      conn.commit()
+      return cur.rowcount > 0
 
   def save_processed_video(
       self,
@@ -348,7 +380,7 @@ class DatabaseManager:
       summary_markdown: str,
       status: str = "COMPLETED",
   ):
-    """Archives a processed video, its transcript, and summary in SQLite."""
+    """Archives or updates a processed video, transcript, and summary in SQLite."""
     with self.get_connection() as conn:
       conn.execute(
           DatabaseQueries.SAVE_PROCESSED_VIDEO,
@@ -359,6 +391,7 @@ class DatabaseManager:
               video_url,
               transcript,
               summary_markdown,
+              status,
               status,
           ),
       )

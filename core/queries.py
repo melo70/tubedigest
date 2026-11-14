@@ -266,11 +266,47 @@ Trascrizione:
   # Video Archive Queries
   # ----------------------------------------------------------------------------
   IS_VIDEO_PROCESSED = """
-    SELECT 1 FROM processed_videos WHERE video_id = ?
+    SELECT 1 FROM processed_videos WHERE video_id = ? AND status = 'COMPLETED'
+  """
+
+  GET_PROCESSED_VIDEO = """
+    SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
+    FROM processed_videos
+    WHERE video_id = ?
+    LIMIT 1
+  """
+
+  GET_PENDING_EMAIL_VIDEOS = """
+    SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
+    FROM processed_videos
+    WHERE status = 'PENDING_EMAIL' AND channel_id = ?
+    ORDER BY created_at ASC
+  """
+
+  GET_ALL_PENDING_EMAIL_VIDEOS = """
+    SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
+    FROM processed_videos
+    WHERE status = 'PENDING_EMAIL'
+    ORDER BY created_at ASC
+  """
+
+  MARK_VIDEO_COMPLETED = """
+    UPDATE processed_videos
+    SET status = 'COMPLETED',
+        email_sent_at = CURRENT_TIMESTAMP
+    WHERE video_id = ?
   """
 
   SAVE_PROCESSED_VIDEO = """
-    INSERT OR REPLACE INTO processed_videos (
+    INSERT INTO processed_videos (
         video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'COMPLETED' THEN CURRENT_TIMESTAMP ELSE NULL END)
+    ON CONFLICT(video_id) DO UPDATE SET
+        channel_id = excluded.channel_id,
+        video_title = COALESCE(excluded.video_title, processed_videos.video_title),
+        video_url = COALESCE(excluded.video_url, processed_videos.video_url),
+        transcript = COALESCE(excluded.transcript, processed_videos.transcript),
+        summary_markdown = COALESCE(excluded.summary_markdown, processed_videos.summary_markdown),
+        status = excluded.status,
+        email_sent_at = CASE WHEN excluded.status = 'COMPLETED' THEN CURRENT_TIMESTAMP ELSE processed_videos.email_sent_at END
   """
