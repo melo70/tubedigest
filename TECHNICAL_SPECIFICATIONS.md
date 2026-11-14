@@ -48,7 +48,7 @@ The configuration file must contain the following sections and keys:
 * `[youtube]`: `feed_url_template` (RSS feed URL template containing the `{channel_id}` placeholder).
 * `[gemini]`: `api_key` (Google Gemini API key) and `model` (e.g., `gemini-2.5-flash`).
 * `[email]`: SMTP parameters (`sender`, `password`, `receiver`, `smtp_server`, `smtp_port`).
-* `[storage]`: File and directory paths (`db_path`, `logs_dir`, `log_file`).
+* `[storage]`: File and directory paths (`db_path`, `logs_dir`, `log_file`, `log_max_bytes`, `log_backup_count`).
 
 ---
 
@@ -79,10 +79,10 @@ Database logic is split between a dedicated SQL query repository and an operatio
 
 ### 4.3. Logging Module (`core/state_manager.py` -> `StateManager`)
 
-The `StateManager` class handles application execution logging:
+The `StateManager` class handles application execution logging with automatic rotation and banner headers:
 
-* **Initialization (`__init__`)**: Reads storage configuration, resolves log paths, and ensures automatic directory creation (`logs_dir`) if it does not already exist via `os.makedirs(..., exist_ok=True)`.
-* **`log_message(message)`**: Prints the message to stdout and appends it to the configured log file (e.g., `logs/tubedigest.log`) prefixed with a formatted timestamp (`%Y-%m-%d %H:%M:%S`).
+* **Initialization (`__init__`)**: Reads storage configuration, configures `BannerRotatingFileHandler` with configurable `max_bytes` and `backup_count`, and ensures new log files start with an ASCII art header banner.
+* **`log_message(message)`**: Prints the message to stdout and appends it to the rotated log file (e.g., `logs/tubedigest.log`) prefixed with a formatted timestamp (`%Y-%m-%d %H:%M:%S`).
 
 ---
 

@@ -102,6 +102,8 @@ smtp_port = 587
 db_path = "data/tubedigest.db"
 logs_dir = "logs"
 log_file = "tubedigest.log"
+log_max_bytes = 1048576       # 1 MB before rotation
+log_backup_count = 5          # Number of rotated backups to keep
 
 [gemini]
 api_key = "YOUR_GEMINI_API_KEY"

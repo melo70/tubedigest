@@ -28,6 +28,8 @@
 #   db_path           : Path to the SQLite database file (stores channels, authors, prompts, and videos).
 #   logs_dir          : Directory where application execution logs are stored.
 #   log_file          : Name of the log file (inside logs_dir).
+#   log_max_bytes     : Maximum log file size in bytes before rotation (e.g. 1048576 = 1MB).
+#   log_backup_count  : Number of rotated backup log files to retain.
 #
 # [gemini]
 #   api_key           : Google Gemini API key used to authenticate with Google GenAI.
@@ -48,6 +50,8 @@ smtp_port = 587
 db_path = "data/tubedigest.db"
 logs_dir = "logs"
 log_file = "tubedigest.log"
+log_max_bytes = 1048576
+log_backup_count = 5
 
 [gemini]
 api_key = "YOUR_API_KEY"
