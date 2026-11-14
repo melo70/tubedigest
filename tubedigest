@@ -10,6 +10,9 @@ Usage:
     - Normal pipeline execution (e.g. via cron):
       ./tubedigest
 
+    - One-shot check for a specific channel in database:
+      ./tubedigest --channel <CHANNEL_ID_OR_NAME>
+
     - Channel management via CLI:
       ./tubedigest --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
       ./tubedigest --delete-channel <CHANNEL_ID_OR_NAME>
@@ -246,16 +249,30 @@ def handle_cli_channels(
   return False
 
 
-def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager, digest: TubeDigest):
-  """Runs the digest check for all active channels in the database."""
-  active_channels = db.get_active_channels()
-
-  if not active_channels:
-    state_manager.log_message("No active channels configured in SQLite database.")
-    state_manager.log_message("Add a channel using: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]")
-    return
-
-  state_manager.log_message(f"Starting check for {len(active_channels)} active channel(s)...")
+def run_pipeline(
+    config: dict,
+    state_manager: StateManager,
+    db: DatabaseManager,
+    digest: TubeDigest,
+    target_channel: Optional[str] = None,
+):
+  """Runs the digest check for all active channels or a specific target channel."""
+  if target_channel:
+    channel = db.get_channel(target_channel)
+    if not channel:
+      state_manager.log_error(f"Channel '{target_channel}' not found in database.")
+      state_manager.log_message("List tracked channels using: ./tubedigest --list-channels")
+      return
+    active_channels = [channel]
+    ch_label = channel.get("channel_name") or channel["channel_id"]
+    state_manager.log_message(f"Starting one-shot check for channel '{ch_label}'...")
+  else:
+    active_channels = db.get_active_channels()
+    if not active_channels:
+      state_manager.log_message("No active channels configured in SQLite database.")
+      state_manager.log_message("Add a channel using: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]")
+      return
+    state_manager.log_message(f"Starting check for {len(active_channels)} active channel(s)...")
 
   for channel in active_channels:
     channel_id = channel["channel_id"]
@@ -363,6 +380,14 @@ def main():
       help="Optional ID of prompt template in database (defaults to 'default').",
   )
   parser.add_argument(
+      "--channel",
+      "--check",
+      "-c",
+      dest="target_channel",
+      metavar="CHANNEL",
+      help="Run one-shot pipeline check only for the specified channel (by ID or Name) in SQLite.",
+  )
+  parser.add_argument(
       "--delete-channel",
       "--remove-channel",
       dest="delete_channel",
@@ -404,8 +429,8 @@ def main():
   if handle_cli_channels(args, db, state_manager, digest):
     return
 
-  # Otherwise run the automated pipeline
-  run_pipeline(config, state_manager, db, digest)
+  # Otherwise run the automated pipeline (all channels or one-shot for single target channel)
+  run_pipeline(config, state_manager, db, digest, target_channel=args.target_channel)
 
 
 if __name__ == "__main__":

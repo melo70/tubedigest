@@ -177,6 +177,13 @@ Trascrizione:
     ORDER BY channel_id ASC
   """
 
+  GET_CHANNEL = """
+    SELECT channel_id, channel_name, prompt_id, is_active
+    FROM channels
+    WHERE channel_id = ? OR channel_name = ?
+    LIMIT 1
+  """
+
   UPDATE_CHANNEL_CHECKED = """
     UPDATE channels 
     SET last_checked_at = CURRENT_TIMESTAMP,

@@ -155,11 +155,18 @@ Manage your monitored channels and prompt templates directly from the command li
 
 ## 🧪 Running the Pipeline
 
-Run the pipeline manually to process all active channels:
-
+### Check All Active Channels
 ```bash
 ./tubedigest
 ```
+
+### Check a Specific Channel (One-Shot Execution)
+```bash
+./tubedigest --channel <CHANNEL_ID_OR_NAME>
+# or using shortcut:
+./tubedigest -c "Mr. RIP"
+```
+*(Verifies updates only for the specified channel among those already tracked in SQLite).*
 
 ### Expected Behavior:
 * For each active channel, TubeDigest checks the latest video via RSS.

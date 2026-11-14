@@ -108,7 +108,7 @@ The main entry point coordinates CLI management and pipeline execution:
 2. **Early State & Logging Setup**: Loads `config.toml` and initializes `StateManager` so all subsequent operations are traced.
 3. **Database Setup**: Connects to SQLite (`DatabaseManager`), handling channel and prompt migrations.
 4. **CLI Handler**: Processes `--add-channel`, `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, and `--show-prompt` arguments.
-5. **Automated Pipeline**: Iterates through active channels, detecting new uploads, transcribing subtitles, prompting Gemini, delivering HTML emails, and persisting state into SQLite archives.
+5. **Automated Pipeline**: Iterates through active channels (or single target channel via `--channel` / `-c`), detecting new uploads, transcribing subtitles, prompting Gemini, delivering HTML emails, and persisting state into SQLite archives.
 
 ---
 

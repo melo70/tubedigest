@@ -142,22 +142,39 @@ class DatabaseManager:
       conn.commit()
     return True
 
+  def get_channel(self, identifier: str) -> Optional[Dict[str, Any]]:
+    """Retrieves a single channel by channel_id or channel_name (with normalized fallback)."""
+    with self.get_connection() as conn:
+      row = conn.execute(
+          DatabaseQueries.GET_CHANNEL, (identifier, identifier)
+      ).fetchone()
+      if row:
+        return dict(row)
+
+      # Normalized case-insensitive fallback (ignoring spaces, underscores, and dots)
+      clean_id = identifier.strip().lower().replace("_", "").replace(" ", "").replace(".", "")
+      all_channels = conn.execute("SELECT channel_id, channel_name, prompt_id, is_active FROM channels").fetchall()
+      for ch in all_channels:
+        c_name = (ch["channel_name"] or "").strip().lower().replace("_", "").replace(" ", "").replace(".", "")
+        if c_name == clean_id:
+          return dict(ch)
+
+      return None
+
   def remove_channel(self, identifier: str) -> Optional[Dict[str, Any]]:
     """Deletes a channel and cascades deletion to all associated records (authors, videos).
 
     Accepts either a channel_id or channel_name. Returns a summary dictionary of deleted
     records across tables, or None if the channel does not exist.
     """
+    channel = self.get_channel(identifier)
+    if not channel:
+      return None
+
+    channel_id = channel["channel_id"]
+    channel_name = channel["channel_name"]
+
     with self.get_connection() as conn:
-      channel = conn.execute(
-          DatabaseQueries.FIND_CHANNEL, (identifier, identifier)
-      ).fetchone()
-      if not channel:
-        return None
-
-      channel_id = channel["channel_id"]
-      channel_name = channel["channel_name"]
-
       videos_count = conn.execute(
           DatabaseQueries.COUNT_CHANNEL_VIDEOS, (channel_id,)
       ).fetchone()[0]
