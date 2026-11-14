@@ -97,7 +97,12 @@ def load_config() -> dict:
     return tomllib.load(f)
 
 
-def handle_cli_channels(args, db: DatabaseManager, state_manager: StateManager) -> bool:
+def handle_cli_channels(
+    args,
+    db: DatabaseManager,
+    state_manager: StateManager,
+    digest: Optional[TubeDigest] = None,
+) -> bool:
   """Handles CLI channel and prompt management arguments. Returns True if handled."""
   if args.list_prompts:
     prompts = db.list_prompts()
@@ -156,14 +161,37 @@ def handle_cli_channels(args, db: DatabaseManager, state_manager: StateManager) 
     return True
 
   if args.add_channel:
+    channel_id = args.add_channel
+    channel_name = args.name
+    prompt_id = args.prompt or "default"
+
+    # Automatically fetch channel and author metadata from YouTube RSS if available
+    metadata = digest.fetch_channel_metadata(channel_id) if digest else None
+    author_name = None
+    author_url = None
+    channel_title = None
+
+    if metadata:
+      channel_title = metadata.get("channel_title")
+      author_name = metadata.get("author_name")
+      author_url = metadata.get("author_url")
+      if not channel_name and channel_title:
+        channel_name = channel_title
+
     db.add_channel(
-        channel_id=args.add_channel,
-        channel_name=args.name,
-        prompt_id=args.prompt,
+        channel_id=channel_id,
+        channel_name=channel_name,
+        prompt_id=prompt_id,
+        author_name=author_name,
+        author_url=author_url,
+        channel_title=channel_title,
     )
-    name_display = f" '{args.name}'" if args.name else ""
-    prompt_display = f" using prompt '{args.prompt or 'default'}'"
-    state_manager.log_message(f"✓ Channel{name_display} ({args.add_channel}) added/updated successfully{prompt_display}.")
+    name_display = f" '{channel_name}'" if channel_name else ""
+    author_display = f" by '{author_name}'" if author_name else ""
+    prompt_display = f" using prompt '{prompt_id}'"
+    state_manager.log_message(
+        f"✓ Channel{name_display} ({channel_id}) added/updated successfully{author_display}{prompt_display}."
+    )
     return True
 
   if args.remove_channel:
@@ -354,13 +382,13 @@ def main():
   if not db_path:
     raise KeyError("Missing required 'db_path' in [storage] configuration section.")
   db = DatabaseManager(db_path=db_path)
+  digest = TubeDigest(config, state_manager=state_manager)
 
   # If a CLI management command was provided, handle it and exit
-  if handle_cli_channels(args, db, state_manager):
+  if handle_cli_channels(args, db, state_manager, digest):
     return
 
   # Otherwise run the automated pipeline
-  digest = TubeDigest(config, state_manager=state_manager)
   run_pipeline(config, state_manager, db, digest)
 
 

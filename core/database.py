@@ -44,6 +44,14 @@ class DatabaseManager:
               DatabaseQueries.DEFAULT_PROMPT_TEXT,
           ),
       )
+
+      # Backfill any existing channel missing author metadata
+      conn.execute("""
+          INSERT OR IGNORE INTO channel_authors (channel_id, author_name, author_url, channel_title)
+          SELECT channel_id, channel_name, 'https://www.youtube.com/channel/' || channel_id, channel_name
+          FROM channels
+          WHERE channel_name IS NOT NULL
+      """)
       conn.commit()
 
   # ----------------------------------------------------------------------------
@@ -99,9 +107,16 @@ class DatabaseManager:
       channel_id: str,
       channel_name: Optional[str] = None,
       prompt_id: Optional[str] = None,
+      author_name: Optional[str] = None,
+      author_url: Optional[str] = None,
+      channel_title: Optional[str] = None,
   ) -> bool:
-    """Adds a new channel or reactivates/updates an existing one."""
+    """Adds a new channel or reactivates/updates an existing one, automatically populating author profile."""
     resolved_prompt_id = prompt_id or "default"
+    resolved_author_name = author_name or channel_name
+    resolved_channel_title = channel_title or channel_name
+    resolved_author_url = author_url or f"https://www.youtube.com/channel/{channel_id}"
+
     with self.get_connection() as conn:
       existing = conn.execute(
           DatabaseQueries.CHECK_CHANNEL_EXISTS,
@@ -116,6 +131,13 @@ class DatabaseManager:
         conn.execute(
             DatabaseQueries.INSERT_CHANNEL,
             (channel_id, channel_name, resolved_prompt_id),
+        )
+
+      # Automatically populate or update channel_authors metadata
+      if resolved_author_name or resolved_channel_title:
+        conn.execute(
+            DatabaseQueries.UPSERT_CHANNEL_AUTHOR,
+            (channel_id, resolved_author_name, resolved_author_url, resolved_channel_title, None),
         )
       conn.commit()
     return True

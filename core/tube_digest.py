@@ -42,6 +42,39 @@ class TubeDigest:
     else:
       print(f"⚠ {message}", file=sys.stderr)
 
+  def fetch_channel_metadata(
+      self, channel_id: str
+  ) -> Optional[Dict[str, str]]:
+    """Fetches channel title and author profile information via RSS feed."""
+    if not channel_id:
+      return None
+
+    target_url = self.feed_url_template.format(channel_id=channel_id)
+    try:
+      feed = feedparser.parse(target_url)
+      if getattr(feed, "bozo", 0) and getattr(feed, "bozo_exception", None) and not feed.entries:
+        return None
+
+      channel_title = feed.feed.get("title")
+      author_detail = feed.feed.get("author_detail", {})
+      author_name = feed.feed.get("author") or author_detail.get("name") or channel_title
+      author_url = author_detail.get("href") or f"https://www.youtube.com/channel/{channel_id}"
+
+      if not channel_title and not author_name:
+        return None
+
+      return {
+          "channel_title": channel_title,
+          "author_name": author_name,
+          "author_url": author_url,
+      }
+    except Exception as e:
+      self._report_error(
+          f"Could not retrieve channel metadata for '{channel_id}'.",
+          exc=e,
+      )
+      return None
+
   def get_latest_video(
       self, channel_id: Optional[str] = None
   ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], Optional[Dict[str, str]]]:
