@@ -142,12 +142,42 @@ class DatabaseManager:
       conn.commit()
     return True
 
-  def remove_channel(self, channel_id: str) -> bool:
-    """Removes a channel from the database."""
+  def remove_channel(self, identifier: str) -> Optional[Dict[str, Any]]:
+    """Deletes a channel and cascades deletion to all associated records (authors, videos).
+
+    Accepts either a channel_id or channel_name. Returns a summary dictionary of deleted
+    records across tables, or None if the channel does not exist.
+    """
     with self.get_connection() as conn:
+      channel = conn.execute(
+          DatabaseQueries.FIND_CHANNEL, (identifier, identifier)
+      ).fetchone()
+      if not channel:
+        return None
+
+      channel_id = channel["channel_id"]
+      channel_name = channel["channel_name"]
+
+      videos_count = conn.execute(
+          DatabaseQueries.COUNT_CHANNEL_VIDEOS, (channel_id,)
+      ).fetchone()[0]
+      authors_count = conn.execute(
+          DatabaseQueries.COUNT_CHANNEL_AUTHORS, (channel_id,)
+      ).fetchone()[0]
+
+      # Explicit cascading deletion across all linked tables
+      conn.execute(DatabaseQueries.DELETE_CHANNEL_AUTHORS, (channel_id,))
+      conn.execute(DatabaseQueries.DELETE_CHANNEL_VIDEOS, (channel_id,))
       cur = conn.execute(DatabaseQueries.REMOVE_CHANNEL, (channel_id,))
       conn.commit()
-      return cur.rowcount > 0
+
+      return {
+          "channel_id": channel_id,
+          "channel_name": channel_name,
+          "authors_deleted": authors_count,
+          "videos_deleted": videos_count,
+          "success": cur.rowcount > 0,
+      }
 
   def list_channels(self) -> List[Dict[str, Any]]:
     """Retrieves all tracked channels joined with author and prompt metadata."""

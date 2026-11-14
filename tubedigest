@@ -12,7 +12,7 @@ Usage:
 
     - Channel management via CLI:
       ./tubedigest --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
-      ./tubedigest --remove-channel <CHANNEL_ID>
+      ./tubedigest --delete-channel <CHANNEL_ID_OR_NAME>
       ./tubedigest --list-channels
 
     - Prompt management via CLI:
@@ -194,12 +194,26 @@ def handle_cli_channels(
     )
     return True
 
-  if args.remove_channel:
-    removed = db.remove_channel(args.remove_channel)
-    if removed:
-      state_manager.log_message(f"✓ Channel '{args.remove_channel}' removed successfully.")
+  if args.delete_channel:
+    target = args.delete_channel
+    result = db.remove_channel(target)
+    if result and result.get("success"):
+      ch_id = result["channel_id"]
+      ch_name = result["channel_name"]
+      name_str = f" '{ch_name}'" if ch_name else ""
+      v_count = result["videos_deleted"]
+      a_count = result["authors_deleted"]
+
+      lines = [
+          f"✓ Channel{name_str} ({ch_id}) and all associated records deleted successfully:",
+          f"  - {a_count} author profile(s) deleted from 'channel_authors'",
+          f"  - {v_count} video archive(s) and transcripts deleted from 'processed_videos'",
+          f"  - Channel definition deleted from 'channels'",
+      ]
+      state_manager.log_message("\n".join(lines))
     else:
-      state_manager.log_error(f"Channel '{args.remove_channel}' not found in database.")
+      state_manager.log_error(f"Channel '{target}' not found in database.")
+      state_manager.log_message("List available channels using: ./tubedigest --list-channels")
     return True
 
   if args.list_channels:
@@ -349,9 +363,11 @@ def main():
       help="Optional ID of prompt template in database (defaults to 'default').",
   )
   parser.add_argument(
+      "--delete-channel",
       "--remove-channel",
-      metavar="CHANNEL_ID",
-      help="Remove a channel from SQLite database.",
+      dest="delete_channel",
+      metavar="CHANNEL",
+      help="Delete a channel and all its associated records (authors, processed videos, transcripts) by Channel ID or Name.",
   )
   parser.add_argument(
       "--list-channels",

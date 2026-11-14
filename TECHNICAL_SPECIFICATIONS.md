@@ -64,8 +64,8 @@ Database logic is split between a dedicated SQL query repository and an operatio
   * `channel_authors`: `channel_id` (PK, FK -> channels), `author_name`, `author_url`, `channel_title`, `custom_url`, `updated_at`.
   * `processed_videos`: `video_id` (PK), `channel_id` (FK -> channels), `video_title`, `video_url`, `transcript`, `summary_markdown`, `status`, `email_sent_at`, `created_at`.
 * **Key Methods**:
-  * `add_channel(...)`: Adds or reactivates a channel in SQLite linked to a `prompt_id`.
-  * `remove_channel(...)`: Cascading delete of a channel and associated records.
+  * `add_channel(...)`: Adds or reactivates a channel in SQLite linked to a `prompt_id` and auto-populates author metadata.
+  * `remove_channel(...)`: Explicit cascading delete of a channel and all associated records across tables (`channel_authors`, `processed_videos`) by Channel ID or Name.
   * `list_channels()`: Returns all channels joined with author and prompt metadata.
   * `list_prompts()`: Returns all stored prompt templates.
   * `get_prompt_details(...)`: Returns full record and template content for a prompt.
@@ -107,7 +107,7 @@ The main entry point coordinates CLI management and pipeline execution:
 1. **Global Exception Interception (`sys.excepthook`)**: Captures unhandled crashes globally. Prevents terminal clutter by displaying polite error summaries on screen while logging complete diagnostic tracebacks as `[CRITICAL]` in `logs/tubedigest.log`.
 2. **Early State & Logging Setup**: Loads `config.toml` and initializes `StateManager` so all subsequent operations are traced.
 3. **Database Setup**: Connects to SQLite (`DatabaseManager`), handling channel and prompt migrations.
-4. **CLI Handler**: Processes `--add-channel`, `--remove-channel`, `--list-channels`, `--list-prompts`, and `--show-prompt` arguments.
+4. **CLI Handler**: Processes `--add-channel`, `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, and `--show-prompt` arguments.
 5. **Automated Pipeline**: Iterates through active channels, detecting new uploads, transcribing subtitles, prompting Gemini, delivering HTML emails, and persisting state into SQLite archives.
 
 ---

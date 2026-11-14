@@ -119,29 +119,29 @@ Manage your monitored channels and prompt templates directly from the command li
 
 ### Add a Channel
 ```bash
-python tubedigest.py --add-channel <CHANNEL_ID> --name "Channel Name"
+./tubedigest --add-channel <CHANNEL_ID> [--name "Channel Name"] [--prompt <PROMPT_ID>]
 ```
-*(Optional: specify `--prompt <PROMPT_ID>` to assign a specific prompt template, defaults to `'default'`).*
 
 ### List Tracked Channels
 ```bash
-python tubedigest.py --list-channels
+./tubedigest --list-channels
 ```
 
 ### List Stored AI Prompts
 ```bash
-python tubedigest.py --list-prompts
+./tubedigest --list-prompts
 ```
 
 ### View Full Prompt Details & Content
 ```bash
-python tubedigest.py --show-prompt <PROMPT_ID>
+./tubedigest --show-prompt <PROMPT_ID>
 ```
 
-### Remove a Channel
+### Delete a Channel (Cascading across all tables)
 ```bash
-python tubedigest.py --remove-channel <CHANNEL_ID>
+./tubedigest --delete-channel <CHANNEL_ID_OR_NAME>
 ```
+*(Also accepts `--remove-channel`. Automatically deletes the channel definition and cascades to remove all associated author profiles, archived videos, transcripts, and summaries by Channel ID or Name).*
 
 ---
 
@@ -150,7 +150,7 @@ python tubedigest.py --remove-channel <CHANNEL_ID>
 Run the pipeline manually to process all active channels:
 
 ```bash
-python tubedigest.py
+./tubedigest
 ```
 
 ### Expected Behavior:

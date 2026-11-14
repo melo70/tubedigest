@@ -128,6 +128,28 @@ Trascrizione:
     WHERE channel_id = ?
   """
 
+  FIND_CHANNEL = """
+    SELECT channel_id, channel_name FROM channels
+    WHERE channel_id = ? OR channel_name = ?
+    LIMIT 1
+  """
+
+  COUNT_CHANNEL_VIDEOS = """
+    SELECT COUNT(*) FROM processed_videos WHERE channel_id = ?
+  """
+
+  COUNT_CHANNEL_AUTHORS = """
+    SELECT COUNT(*) FROM channel_authors WHERE channel_id = ?
+  """
+
+  DELETE_CHANNEL_AUTHORS = """
+    DELETE FROM channel_authors WHERE channel_id = ?
+  """
+
+  DELETE_CHANNEL_VIDEOS = """
+    DELETE FROM processed_videos WHERE channel_id = ?
+  """
+
   REMOVE_CHANNEL = """
     DELETE FROM channels WHERE channel_id = ?
   """
