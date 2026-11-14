@@ -25,7 +25,10 @@ The project is structured with an internal `core/` package divided into the foll
 │
 ├── config.toml              # Centralized configuration file (ignored by Git)
 ├── config.example.toml      # Configuration template with placeholder values
-├── tubedigest.py            # Main entry point & CLI channel/prompt manager
+├── tubedigest               # Main executable entry point & CLI channel/prompt manager
+├── templates/               # External default templates (prompts and email layout)
+│   ├── default_prompt.txt
+│   └── default_email.html
 ├── data/                    # Local SQLite database directory (ignored by Git)
 │   └── .gitkeep
 ├── /core                    # Python package for internal application modules

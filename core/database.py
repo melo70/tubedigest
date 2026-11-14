@@ -8,14 +8,23 @@ from core.queries import DatabaseQueries
 class DatabaseManager:
   """Manages the SQLite database for channels, authors, prompts, and processed video archives."""
 
-  def __init__(self, db_path: str):
+  def __init__(self, db_path: str, templates_dir: Optional[str] = "templates"):
     if not db_path:
       raise ValueError("db_path must be specified and cannot be empty.")
     self.db_path = db_path
+    self.templates_dir = templates_dir or "templates"
     db_dir = os.path.dirname(self.db_path)
     if db_dir:
       os.makedirs(db_dir, exist_ok=True)
     self.init_db()
+
+  def load_template_file(self, filename: str) -> str:
+    """Loads a template file from the external templates directory."""
+    path = os.path.join(self.templates_dir, filename)
+    if os.path.exists(path):
+      with open(path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+    return ""
 
   def get_connection(self) -> sqlite3.Connection:
     """Returns a new database connection configured with Row factory and foreign keys."""
@@ -25,7 +34,7 @@ class DatabaseManager:
     return conn
 
   def init_db(self):
-    """Initializes tables, indexes, and default prompt seed."""
+    """Initializes tables, indexes, and default prompt seed from external templates."""
     with self.get_connection() as conn:
       # Migration safeguard: if channels had old prompt_file column, migrate to prompt_id
       cursor = conn.execute("PRAGMA table_info(channels)")
@@ -41,22 +50,26 @@ class DatabaseManager:
       if p_columns and "email_template" not in p_columns:
         conn.execute("ALTER TABLE prompts ADD COLUMN email_template TEXT")
 
-      # Seed default prompt if not already present
+      # Seed default prompt and email layout from external template files
+      default_prompt_text = self.load_template_file("default_prompt.txt")
+      default_email_html = self.load_template_file("default_email.html")
+
       conn.execute(
           DatabaseQueries.SEED_DEFAULT_PROMPT,
           (
               DatabaseQueries.DEFAULT_PROMPT_ID,
               DatabaseQueries.DEFAULT_PROMPT_TITLE,
-              DatabaseQueries.DEFAULT_PROMPT_TEXT,
-              DatabaseQueries.DEFAULT_EMAIL_TEMPLATE,
+              default_prompt_text,
+              default_email_html,
           ),
       )
 
-      # Ensure existing default prompt has email_template populated
-      conn.execute(
-          """UPDATE prompts SET email_template = ? WHERE prompt_id = ? AND (email_template IS NULL OR email_template = '')""",
-          (DatabaseQueries.DEFAULT_EMAIL_TEMPLATE, DatabaseQueries.DEFAULT_PROMPT_ID),
-      )
+      # Ensure existing default prompt has email_template populated if empty
+      if default_email_html:
+        conn.execute(
+            """UPDATE prompts SET email_template = ? WHERE prompt_id = ? AND (email_template IS NULL OR email_template = '')""",
+            (default_email_html, DatabaseQueries.DEFAULT_PROMPT_ID),
+        )
 
       # Backfill any existing channel missing author metadata
       conn.execute("""
@@ -95,7 +108,8 @@ class DatabaseManager:
       if default_row and default_row["prompt_text"]:
         return default_row["prompt_text"]
 
-    return DatabaseQueries.DEFAULT_PROMPT_TEXT
+    # Final fallback if not found in database: read external template file
+    return self.load_template_file("default_prompt.txt")
 
   def get_email_template(self, prompt_id: Optional[str] = None) -> Optional[str]:
     """Retrieves email HTML template for the given prompt_id, or None if not configured."""

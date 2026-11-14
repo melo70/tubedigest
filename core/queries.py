@@ -6,52 +6,6 @@ class DatabaseQueries:
 
   DEFAULT_PROMPT_ID = "default"
   DEFAULT_PROMPT_TITLE = "Standard Markdown Summary"
-  DEFAULT_PROMPT_TEXT = """Sei un assistente esperto nell'analisi di contenuti video. 
-Analizza la trascrizione del video di YouTube dal titolo "{video_title}" fornita di seguito.
-
-Genera un sunto approfondito e ben strutturato in lingua italiana, formattato rigorosamente in Markdown elegante e leggibile.
-Usa questa struttura:
-- Un titolo principale (`# {video_title}`)
-- Una sezione `## Panoramica Generale` (2-3 frasi chiare)
-- Una sezione `## Punti Chiave` (usa elenchi puntati con parole chiave in **grassetto**)
-- Una sezione `## Conclusioni e Riflessioni`
-
-Non aggiungere preamboli o commenti fuori dal Markdown.
-Trascrizione:
-{transcript}"""
-
-  DEFAULT_EMAIL_TEMPLATE = """<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <style>
-      body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; }
-      h1 { color: #1a73e8; font-size: 22px; border-bottom: 2px solid #1a73e8; padding-bottom: 5px; }
-      h2, h3, h4 { color: #444; margin-top: 20px; }
-      ul { padding-left: 20px; }
-      strong { color: #000; }
-      .video-box { text-align: center; margin-bottom: 20px; }
-      .thumbnail { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #ccc; display: block; margin: 0 auto; }
-      .container { background-color: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #ddd; }
-      .footer-link { margin-top: 25px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 14px; }
-    </style>
-  </head>
-  <body>
-    <h2>New video published!</h2>
-    <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
-    <div class="video-box">
-      <a href="{video_url}" target="_blank">
-        <img src="{thumbnail_url}" alt="{subject}" class="thumbnail" />
-      </a>
-    </div>
-    <div class="container">
-      {html_body}
-      <div class="footer-link">
-        <a href="{video_url}" target="_blank">Watch video on YouTube</a>
-      </div>
-    </div>
-  </body>
-</html>"""
 
   # ----------------------------------------------------------------------------
   # DDL: Schema Initialization

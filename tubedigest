@@ -737,7 +737,8 @@ def main():
   db_path = storage.get("db_path")
   if not db_path:
     raise KeyError("Missing required 'db_path' in [storage] configuration section.")
-  db = DatabaseManager(db_path=db_path)
+  templates_dir = storage.get("templates_dir", "templates")
+  db = DatabaseManager(db_path=db_path, templates_dir=templates_dir)
   digest = TubeDigest(config, state_manager=state_manager)
 
   # If a CLI management command was provided, handle it and exit
