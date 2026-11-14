@@ -8,20 +8,27 @@ Description: Automated pipeline that monitors multiple YouTube channels via RSS,
 
 Usage:
     - Normal pipeline execution (e.g. via cron):
-      python tubedigest.py
+      ./tubedigest
 
     - Channel management via CLI:
-      python tubedigest.py --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
-      python tubedigest.py --remove-channel <CHANNEL_ID>
-      python tubedigest.py --list-channels
+      ./tubedigest --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
+      ./tubedigest --remove-channel <CHANNEL_ID>
+      ./tubedigest --list-channels
 
     - Prompt management via CLI:
-      python tubedigest.py --list-prompts
-      python tubedigest.py --show-prompt <PROMPT_ID>
+      ./tubedigest --list-prompts
+      ./tubedigest --show-prompt <PROMPT_ID>
 """
 
 import os
 import sys
+
+# Automatically use local virtual environment if available
+_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+_VENV_PYTHON = os.path.join(_CURRENT_DIR, ".venv", "bin", "python3")
+if sys.prefix == sys.base_prefix and os.path.exists(_VENV_PYTHON):
+  os.execv(_VENV_PYTHON, [_VENV_PYTHON] + sys.argv)
+
 import argparse
 import datetime
 import traceback
@@ -90,54 +97,62 @@ def load_config() -> dict:
     return tomllib.load(f)
 
 
-def handle_cli_channels(args, db: DatabaseManager) -> bool:
+def handle_cli_channels(args, db: DatabaseManager, state_manager: StateManager) -> bool:
   """Handles CLI channel and prompt management arguments. Returns True if handled."""
   if args.list_prompts:
     prompts = db.list_prompts()
     if not prompts:
-      print("No prompts found in database.")
+      state_manager.log_message("No prompts found in database.")
       return True
 
     header = f"{'Default':<9} {'Prompt ID':<18} {'Title':<32} {'Updated At'}"
-    print("\n" + "=" * len(header))
-    print("Stored AI Prompt Templates (SQLite):")
-    print("-" * len(header))
-    print(header)
-    print("-" * len(header))
+    lines = [
+        "",
+        "=" * len(header),
+        "Stored AI Prompt Templates (SQLite):",
+        "-" * len(header),
+        header,
+        "-" * len(header),
+    ]
     for p in prompts:
       is_def = "[YES]" if p["is_default"] else "[NO]"
       pid = p["prompt_id"]
       title = (p["prompt_title"] or "-")[:30]
       updated = str(p.get("updated_at") or "-")[:19]
-      print(f"{is_def:<9} {pid:<18} {title:<32} {updated}")
-    print("=" * len(header))
-    print(f"Total: {len(prompts)} prompt template(s)\n")
-    print("Tip: View full prompt text using: python tubedigest.py --show-prompt <PROMPT_ID>\n")
+      lines.append(f"{is_def:<9} {pid:<18} {title:<32} {updated}")
+    lines.append("=" * len(header))
+    lines.append(f"Total: {len(prompts)} prompt template(s)\n")
+    lines.append("Tip: View full prompt text using: ./tubedigest --show-prompt <PROMPT_ID>\n")
+    state_manager.log_message("\n".join(lines))
     return True
 
   if args.show_prompt:
     prompt = db.get_prompt_details(args.show_prompt)
     if not prompt:
-      print(f"⚠ Prompt '{args.show_prompt}' not found in database.")
-      print("List available prompts with: python tubedigest.py --list-prompts")
+      state_manager.log_error(f"Prompt '{args.show_prompt}' not found in database.")
+      state_manager.log_message("List available prompts with: ./tubedigest --list-prompts")
       return True
 
     is_def = "Yes (Default)" if prompt["is_default"] else "No"
     divider = "=" * 80
     sub_divider = "-" * 80
 
-    print("\n" + divider)
-    print(f"Prompt Template: {prompt['prompt_id']}")
-    print(divider)
-    print(f"{'ID':<14}: {prompt['prompt_id']}")
-    print(f"{'Title':<14}: {prompt['prompt_title'] or '-'}")
-    print(f"{'Is Default':<14}: {is_def}")
-    print(f"{'Updated At':<14}: {prompt.get('updated_at') or '-'}")
-    print(sub_divider)
-    print("Template Content:")
-    print(sub_divider)
-    print(prompt["prompt_text"])
-    print(divider + "\n")
+    lines = [
+        "",
+        divider,
+        f"Prompt Template: {prompt['prompt_id']}",
+        divider,
+        f"{'ID':<14}: {prompt['prompt_id']}",
+        f"{'Title':<14}: {prompt['prompt_title'] or '-'}",
+        f"{'Is Default':<14}: {is_def}",
+        f"{'Updated At':<14}: {prompt.get('updated_at') or '-'}",
+        sub_divider,
+        "Template Content:",
+        sub_divider,
+        prompt["prompt_text"],
+        divider + "\n",
+    ]
+    state_manager.log_message("\n".join(lines))
     return True
 
   if args.add_channel:
@@ -148,38 +163,42 @@ def handle_cli_channels(args, db: DatabaseManager) -> bool:
     )
     name_display = f" '{args.name}'" if args.name else ""
     prompt_display = f" using prompt '{args.prompt or 'default'}'"
-    print(f"✓ Channel{name_display} ({args.add_channel}) added/updated successfully{prompt_display}.")
+    state_manager.log_message(f"✓ Channel{name_display} ({args.add_channel}) added/updated successfully{prompt_display}.")
     return True
 
   if args.remove_channel:
     removed = db.remove_channel(args.remove_channel)
     if removed:
-      print(f"✓ Channel '{args.remove_channel}' removed successfully.")
+      state_manager.log_message(f"✓ Channel '{args.remove_channel}' removed successfully.")
     else:
-      print(f"⚠ Channel '{args.remove_channel}' not found in database.")
+      state_manager.log_error(f"Channel '{args.remove_channel}' not found in database.")
     return True
 
   if args.list_channels:
     channels = db.list_channels()
     if not channels:
-      print("No channels found in database.")
-      print("Add a channel using: python tubedigest.py --add-channel <CHANNEL_ID> [--name <NAME>]")
+      state_manager.log_message("No channels found in database.")
+      state_manager.log_message("Add a channel using: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]")
       return True
 
     header = f"{'Status':<10} {'Channel ID':<26} {'Channel Name':<25} {'Author / Creator':<20} {'Prompt ID'}"
-    print("\n" + "=" * len(header))
-    print("Tracked YouTube Channels (SQLite):")
-    print("-" * len(header))
-    print(header)
-    print("-" * len(header))
+    lines = [
+        "",
+        "=" * len(header),
+        "Tracked YouTube Channels (SQLite):",
+        "-" * len(header),
+        header,
+        "-" * len(header),
+    ]
     for ch in channels:
       status = "[ACTIVE]" if ch["is_active"] else "[DISABLED]"
       name = (ch["channel_name"] or "Unknown")[:23]
       author = (ch.get("author_name") or "-")[:18]
       prompt = ch.get("prompt_id") or "default"
-      print(f"{status:<10} {ch['channel_id']:<26} {name:<25} {author:<20} {prompt}")
-    print("=" * len(header))
-    print(f"Total: {len(channels)} channel(s)\n")
+      lines.append(f"{status:<10} {ch['channel_id']:<26} {name:<25} {author:<20} {prompt}")
+    lines.append("=" * len(header))
+    lines.append(f"Total: {len(channels)} channel(s)\n")
+    state_manager.log_message("\n".join(lines))
     return True
 
   return False
@@ -191,7 +210,7 @@ def run_pipeline(config: dict, state_manager: StateManager, db: DatabaseManager,
 
   if not active_channels:
     state_manager.log_message("No active channels configured in SQLite database.")
-    state_manager.log_message("Add a channel using: python tubedigest.py --add-channel <CHANNEL_ID> [--name <NAME>]")
+    state_manager.log_message("Add a channel using: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]")
     return
 
   state_manager.log_message(f"Starting check for {len(active_channels)} active channel(s)...")
@@ -337,7 +356,7 @@ def main():
   db = DatabaseManager(db_path=db_path)
 
   # If a CLI management command was provided, handle it and exit
-  if handle_cli_channels(args, db):
+  if handle_cli_channels(args, db, state_manager):
     return
 
   # Otherwise run the automated pipeline

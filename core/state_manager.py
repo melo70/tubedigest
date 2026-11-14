@@ -75,14 +75,22 @@ class StateManager:
       f.write(header)
 
   def log_message(self, message: str):
-    """Writes an informational message to stdout and appends it to the rotated log file."""
+    """Writes an informational message to stdout and appends each line to the rotated log file."""
     print(message)
-    self.logger.info(message)
+    if "\n" in message:
+      for line in message.splitlines():
+        self.logger.info(line)
+    else:
+      self.logger.info(message)
 
   def log_error(self, message: str, exc: Optional[BaseException] = None):
     """Prints a friendly error message to stderr and logs technical details with traceback to file."""
     print(f"⚠ {message}", file=sys.stderr)
+    lines = message.splitlines() if "\n" in message else [message]
     if exc:
-      self.logger.error(f"{message} - Exception: {exc}", exc_info=exc)
+      self.logger.error(f"{lines[0]} - Exception: {exc}", exc_info=exc)
+      for line in lines[1:]:
+        self.logger.error(line)
     else:
-      self.logger.error(message)
+      for line in lines:
+        self.logger.error(line)
