@@ -145,6 +145,22 @@ Manage your monitored channels and prompt templates directly from the command li
 ./tubedigest --show-prompt <PROMPT_ID>
 ```
 
+### Deactivate / Disable a Channel
+Temporarily ignore a channel during automated checks without deleting its history or configuration:
+```bash
+./tubedigest --disable-channel <CHANNEL_ID_OR_NAME>
+# Alternatively:
+./tubedigest --deactivate-channel <CHANNEL_ID_OR_NAME>
+```
+
+### Reactivate / Enable a Channel
+Re-enable a previously deactivated channel for automated checks:
+```bash
+./tubedigest --enable-channel <CHANNEL_ID_OR_NAME>
+# Alternatively:
+./tubedigest --activate-channel <CHANNEL_ID_OR_NAME>
+```
+
 ### Delete a Channel (Cascading across all tables)
 ```bash
 ./tubedigest --delete-channel <CHANNEL_ID_OR_NAME>

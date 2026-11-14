@@ -128,6 +128,12 @@ Trascrizione:
     WHERE channel_id = ?
   """
 
+  SET_CHANNEL_ACTIVE = """
+    UPDATE channels
+    SET is_active = ?
+    WHERE channel_id = ?
+  """
+
   FIND_CHANNEL = """
     SELECT channel_id, channel_name FROM channels
     WHERE channel_id = ? OR channel_name = ?

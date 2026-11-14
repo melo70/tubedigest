@@ -161,6 +161,33 @@ class DatabaseManager:
 
       return None
 
+  def set_channel_active(
+      self, identifier: str, is_active: bool
+  ) -> Optional[Dict[str, Any]]:
+    """Enables or disables a channel by channel_id or channel_name.
+
+    Returns a dictionary with channel details and updated status, or None if not found.
+    """
+    channel = self.get_channel(identifier)
+    if not channel:
+      return None
+
+    channel_id = channel["channel_id"]
+    channel_name = channel["channel_name"]
+    status_val = 1 if is_active else 0
+
+    with self.get_connection() as conn:
+      cur = conn.execute(
+          DatabaseQueries.SET_CHANNEL_ACTIVE, (status_val, channel_id)
+      )
+      conn.commit()
+      return {
+          "channel_id": channel_id,
+          "channel_name": channel_name,
+          "is_active": status_val,
+          "success": cur.rowcount > 0,
+      }
+
   def remove_channel(self, identifier: str) -> Optional[Dict[str, Any]]:
     """Deletes a channel and cascades deletion to all associated records (authors, videos).
 

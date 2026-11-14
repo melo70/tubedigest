@@ -15,6 +15,8 @@ Usage:
 
     - Channel management via CLI:
       ./tubedigest --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
+      ./tubedigest --disable-channel <CHANNEL_ID_OR_NAME>
+      ./tubedigest --enable-channel <CHANNEL_ID_OR_NAME>
       ./tubedigest --delete-channel <CHANNEL_ID_OR_NAME>
       ./tubedigest --list-channels
 
@@ -197,6 +199,36 @@ def handle_cli_channels(
     )
     return True
 
+  if args.disable_channel:
+    target = args.disable_channel
+    result = db.set_channel_active(target, is_active=False)
+    if result and result.get("success"):
+      ch_id = result["channel_id"]
+      ch_name = result["channel_name"]
+      name_str = f" '{ch_name}'" if ch_name else ""
+      state_manager.log_message(
+          f"✓ Channel{name_str} ({ch_id}) deactivated successfully. TubeDigest will ignore it during automated checks."
+      )
+    else:
+      state_manager.log_error(f"Channel '{target}' not found in database.")
+      state_manager.log_message("List available channels using: ./tubedigest --list-channels")
+    return True
+
+  if args.enable_channel:
+    target = args.enable_channel
+    result = db.set_channel_active(target, is_active=True)
+    if result and result.get("success"):
+      ch_id = result["channel_id"]
+      ch_name = result["channel_name"]
+      name_str = f" '{ch_name}'" if ch_name else ""
+      state_manager.log_message(
+          f"✓ Channel{name_str} ({ch_id}) activated successfully. TubeDigest will include it in automated checks."
+      )
+    else:
+      state_manager.log_error(f"Channel '{target}' not found in database.")
+      state_manager.log_message("List available channels using: ./tubedigest --list-channels")
+    return True
+
   if args.delete_channel:
     target = args.delete_channel
     result = db.remove_channel(target)
@@ -265,7 +297,12 @@ def run_pipeline(
       return
     active_channels = [channel]
     ch_label = channel.get("channel_name") or channel["channel_id"]
-    state_manager.log_message(f"Starting one-shot check for channel '{ch_label}'...")
+    if not channel.get("is_active", 1):
+      state_manager.log_message(
+          f"Notice: Channel '{ch_label}' is currently marked [DISABLED] in SQLite. Running explicit one-shot check..."
+      )
+    else:
+      state_manager.log_message(f"Starting one-shot check for channel '{ch_label}'...")
   else:
     active_channels = db.get_active_channels()
     if not active_channels:
@@ -386,6 +423,20 @@ def main():
       dest="target_channel",
       metavar="CHANNEL",
       help="Run one-shot pipeline check only for the specified channel (by ID or Name) in SQLite.",
+  )
+  parser.add_argument(
+      "--disable-channel",
+      "--deactivate-channel",
+      dest="disable_channel",
+      metavar="CHANNEL",
+      help="Deactivate a channel so TubeDigest ignores it during checks (by Channel ID or Name).",
+  )
+  parser.add_argument(
+      "--enable-channel",
+      "--activate-channel",
+      dest="enable_channel",
+      metavar="CHANNEL",
+      help="Reactivate a disabled channel in SQLite database (by Channel ID or Name).",
   )
   parser.add_argument(
       "--delete-channel",
