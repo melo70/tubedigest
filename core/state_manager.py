@@ -31,6 +31,19 @@ class BannerRotatingFileHandler(RotatingFileHandler):
       f.write(header)
 
 
+class PrefixMultilineFormatter(logging.Formatter):
+  """Formatter that prefixes every line of multiline messages and exception tracebacks with timestamp and level."""
+
+  def format(self, record: logging.LogRecord) -> str:
+    formatted = super().format(record)
+    lines = formatted.splitlines()
+    if len(lines) <= 1:
+      return formatted
+
+    prefix = f"[{self.formatTime(record, self.datefmt)}] [{record.levelname}] "
+    return "\n".join([lines[0]] + [f"{prefix}{line}" for line in lines[1:]])
+
+
 class StateManager:
   """Manages application logging with automatic rotation and ASCII art headers."""
 
@@ -61,7 +74,7 @@ class StateManager:
           backupCount=self.backup_count,
           encoding="utf-8",
       )
-      formatter = logging.Formatter(
+      formatter = PrefixMultilineFormatter(
           "[%(asctime)s] [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
       )
       file_handler.setFormatter(formatter)
@@ -75,22 +88,12 @@ class StateManager:
       f.write(header)
 
   def log_message(self, message: str):
-    """Writes an informational message to stdout and appends each line to the rotated log file."""
+    """Writes an informational message to stdout and appends it to the rotated log file."""
     print(message)
-    if "\n" in message:
-      for line in message.splitlines():
-        self.logger.info(line)
-    else:
-      self.logger.info(message)
+    self.logger.info(message)
 
   def log_error(self, message: str, exc: Optional[BaseException] = None):
     """Prints a friendly error message to stderr and logs technical details with traceback to file."""
     print(f"⚠ {message}", file=sys.stderr)
-    lines = message.splitlines() if "\n" in message else [message]
-    if exc:
-      self.logger.error(f"{lines[0]} - Exception: {exc}", exc_info=exc)
-      for line in lines[1:]:
-        self.logger.error(line)
-    else:
-      for line in lines:
-        self.logger.error(line)
+    error_msg = f"{message} - Exception: {exc}" if exc else message
+    self.logger.error(error_msg, exc_info=exc)
