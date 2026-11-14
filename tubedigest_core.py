@@ -121,7 +121,7 @@ class TubeDigest:
       print(f"Error generating summary with Gemini: {e}")
       return "Error generating summary."
 
-  def send_email(self, subject, markdown_content, video_url, video_id, email_template=None):
+  def send_email(self, subject, markdown_content, video_url, video_id, email_template=None, channel_label=None):
     """Sends a formatted HTML email with thumbnail and video link."""
     try:
       if not email_template or not email_template.strip():
@@ -162,6 +162,9 @@ class TubeDigest:
       server.sendmail(self.sender, self.receiver, msg.as_string())
       server.quit()
 
-      print("Email sent successfully!")
+      if channel_label:
+        print(f"[{channel_label}] Email digest sent successfully.")
+      else:
+        print("Email sent successfully!")
     except Exception as e:
       print(f"Error sending email: {e}")

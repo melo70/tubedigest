@@ -426,6 +426,7 @@ def process_single_video(
         video_url,
         video_id,
         email_template=email_template,
+        channel_label=channel_label,
     )
 
     if not email_sent:

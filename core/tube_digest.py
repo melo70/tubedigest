@@ -237,6 +237,7 @@ class TubeDigest:
       video_url: str,
       video_id: str,
       email_template: Optional[str] = None,
+      channel_label: Optional[str] = None,
   ) -> bool:
     """Sends a formatted HTML email with thumbnail and video link using the specified template."""
     try:
@@ -279,15 +280,22 @@ class TubeDigest:
       server.sendmail(self.sender, self.receiver, msg.as_string())
       server.quit()
 
+      success_msg = (
+          f"[{channel_label}] Email digest sent successfully."
+          if channel_label
+          else f"Email digest sent successfully for '{subject}'."
+      )
+
       if self.state_manager:
-        self.state_manager.log_message(f"[{subject}] Email digest sent successfully for '{subject}'.")
+        self.state_manager.log_message(success_msg)
       else:
-        print(f"[{subject}] Email digest sent successfully for '{subject}'.")
+        print(success_msg)
       return True
 
     except Exception as e:
+      err_prefix = f"[{channel_label}] " if channel_label else ""
       self._report_error(
-          f"[{subject}] Failed to send email digest for '{subject}'. Check SMTP credentials and network connection.",
+          f"{err_prefix}Failed to send email digest for '{subject}'. Check SMTP credentials and network connection.",
           exc=e,
       )
       return False
