@@ -9,6 +9,14 @@
 
 It continuously monitors multiple YouTube channels via RSS feeds, downloads new video transcripts, produces structured, high-quality Markdown summaries using the Google Gemini API, and dispatches formatted HTML email digests directly to your inbox. All channel subscriptions, transcripts, and summaries are persistently managed through a lightweight local **SQLite** database.
 
+> [!WARNING]
+> ### ⚠️ Target Audience & Disclaimer (Read Before Using)
+> **TubeDigest is an open-source utility tailored for tech-savvy users, developers, and self-hosters ("smanettoni").**
+> 
+> * **Technical familiarity required**: Setting up and running this pipeline requires basic familiarity with the Linux CLI, Python virtual environments, editing configuration files (`config.toml`), generating third-party API keys (Google AI Studio), managing SMTP Application Passwords, and configuring background tasks (`cron`).
+> * **Not a plug-and-play desktop app**: This is a headless automation script, not a consumer application with a graphical wizard or 24/7 technical support. A minimum level of technical autonomy and troubleshooting skill is assumed.
+> * **"As-Is" & Disclaimer of Liability**: This software is provided free and "as is", without warranty of any kind, express or implied. The author assumes no responsibility or liability for email delivery issues, API quota usage or costs incurred on third-party services (Google AI Studio), or unintended data modifications. Use at your own discretion.
+
 ---
 
 ## 🚀 Key Features
@@ -32,7 +40,7 @@ It continuously monitors multiple YouTube channels via RSS feeds, downloads new 
 tubedigest/
 ├── config.example.toml      # Configuration template with placeholder values
 ├── config.toml              # Your active configuration (ignored by Git)
-├── tubedigest.py            # Main application entry point & CLI manager
+├── tubedigest               # Executable main application entry point & CLI manager
 ├── requirements.txt         # Python package dependencies
 ├── TECHNICAL_SPECIFICATIONS.md # Detailed architecture and engineering specs
 ├── data/                    # Local SQLite database directory (ignored by Git)
@@ -171,7 +179,7 @@ To monitor channels automatically in the background, set up a `cron` job on your
 
 2. Add a schedule (for example, running every 2 hours):
    ```cron
-   0 */2 * * * cd /path/to/tubedigest && /path/to/tubedigest/.venv/bin/python tubedigest.py >> /path/to/tubedigest/logs/cron.log 2>&1
+   0 */2 * * * cd /path/to/tubedigest && ./tubedigest >> /path/to/tubedigest/logs/cron.log 2>&1
    ```
    *(Make sure to replace `/path/to/tubedigest` with the actual absolute path to your project).*
 
