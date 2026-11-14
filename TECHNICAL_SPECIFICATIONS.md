@@ -59,7 +59,7 @@ Database logic is split between a dedicated SQL query repository and an operatio
 * **`DatabaseQueries` (`core/queries.py`)**: Centralized repository containing all DDL and DML statements, isolating raw SQL from Python logic.
 * **`DatabaseManager` (`core/database.py`)**: Executes queries, handles connections, transactions, and foreign keys.
 * **Schema Tables**:
-  * `prompts`: `prompt_id` (PK), `prompt_title`, `prompt_text`, `is_default`, `created_at`, `updated_at`.
+  * `prompts`: `prompt_id` (PK), `prompt_title`, `prompt_text`, `email_template`, `is_default`, `created_at`, `updated_at`.
   * `channels`: `channel_id` (PK), `channel_name`, `prompt_id` (FK -> prompts), `is_active`, `last_checked_at`, `created_at`.
   * `channel_authors`: `channel_id` (PK, FK -> channels), `author_name`, `author_url`, `channel_title`, `custom_url`, `updated_at`.
   * `processed_videos`: `video_id` (PK), `channel_id` (FK -> channels), `video_title`, `video_url`, `transcript`, `summary_markdown`, `status`, `email_sent_at`, `created_at`.
@@ -72,6 +72,7 @@ Database logic is split between a dedicated SQL query repository and an operatio
   * `list_prompts()`: Returns all stored prompt templates.
   * `get_prompt_details(...)`: Returns full record and template content for a prompt.
   * `get_prompt_text(...)`: Retrieves prompt text by ID or falls back to default.
+  * `get_email_template(...)`: Retrieves email HTML layout template by prompt_id or falls back to default.
   * `upsert_channel_author(...)`: Automatically updates author biographical information when detected from RSS feeds.
   * `get_active_channels()`: Returns active channels for batch processing.
   * `is_video_processed(video_id)`: Instant index lookup preventing duplicate processing.
@@ -99,7 +100,7 @@ The `TubeDigest` class encapsulates all interactions with external services:
 * **`get_video_details(video_id)`**: Resolves video title, author, and channel ID for an arbitrary YouTube video using standard oEmbed and watch page metadata extraction without requiring a YouTube Data API key.
 * **`get_transcript(video_id)`**: Extracts the text transcript using `youtube_transcript_api`. Catches exceptions (`TranscriptsDisabled`, `NoTranscriptFound`, network drops), logs the stack trace to the log file, and returns `None`.
 * **`summarize_transcript(video_title, transcript, prompt_template)`**: Injects `video_title` and `transcript` into the template loaded from SQLite. Submits request via `client.models.generate_content`. If an API or quota error occurs, records the traceback and returns `None` so the video is safely retried on subsequent runs.
-* **`send_email(subject, markdown_content, video_url, video_id)`**: Converts Markdown content into HTML using `markdown`. Embeds the YouTube thumbnail (`https://img.youtube.com/vi/{video_id}/hqdefault.jpg`) and transmits the email via authenticated STARTTLS SMTP. Returns `True` on success and `False` on failure, preventing incomplete states from being marked as completed.
+* **`send_email(subject, markdown_content, video_url, video_id, email_template=None)`**: Converts Markdown content into HTML using `markdown`. Embeds the YouTube thumbnail (`https://img.youtube.com/vi/{video_id}/hqdefault.jpg`) into the prompt's customized HTML layout loaded from SQLite and transmits the email via authenticated STARTTLS SMTP. Returns `True` on success and `False` on failure, preventing incomplete states from being marked as completed.
 
 ---
 

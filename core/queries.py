@@ -20,6 +20,39 @@ Non aggiungere preamboli o commenti fuori dal Markdown.
 Trascrizione:
 {transcript}"""
 
+  DEFAULT_EMAIL_TEMPLATE = """<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; }
+      h1 { color: #1a73e8; font-size: 22px; border-bottom: 2px solid #1a73e8; padding-bottom: 5px; }
+      h2, h3, h4 { color: #444; margin-top: 20px; }
+      ul { padding-left: 20px; }
+      strong { color: #000; }
+      .video-box { text-align: center; margin-bottom: 20px; }
+      .thumbnail { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #ccc; display: block; margin: 0 auto; }
+      .container { background-color: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #ddd; }
+      .footer-link { margin-top: 25px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <h2>New video published!</h2>
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
+    <div class="video-box">
+      <a href="{video_url}" target="_blank">
+        <img src="{thumbnail_url}" alt="{subject}" class="thumbnail" />
+      </a>
+    </div>
+    <div class="container">
+      {html_body}
+      <div class="footer-link">
+        <a href="{video_url}" target="_blank">Watch video on YouTube</a>
+      </div>
+    </div>
+  </body>
+</html>"""
+
   # ----------------------------------------------------------------------------
   # DDL: Schema Initialization
   # ----------------------------------------------------------------------------
@@ -28,6 +61,7 @@ Trascrizione:
         prompt_id           TEXT PRIMARY KEY,
         prompt_title        TEXT,
         prompt_text         TEXT NOT NULL,
+        email_template      TEXT,
         is_default          INTEGER DEFAULT 0,
         created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -74,12 +108,12 @@ Trascrizione:
   # Prompt Queries
   # ----------------------------------------------------------------------------
   SEED_DEFAULT_PROMPT = """
-    INSERT OR IGNORE INTO prompts (prompt_id, prompt_title, prompt_text, is_default)
-    VALUES (?, ?, ?, 1)
+    INSERT OR IGNORE INTO prompts (prompt_id, prompt_title, prompt_text, email_template, is_default)
+    VALUES (?, ?, ?, ?, 1)
   """
 
   LIST_PROMPTS = """
-    SELECT prompt_id, prompt_title, is_default, prompt_text, updated_at
+    SELECT prompt_id, prompt_title, is_default, prompt_text, email_template, updated_at
     FROM prompts
     ORDER BY is_default DESC, prompt_id ASC
   """
@@ -89,21 +123,22 @@ Trascrizione:
   """
 
   GET_PROMPT_DETAILS = """
-    SELECT prompt_id, prompt_title, is_default, prompt_text, created_at, updated_at
+    SELECT prompt_id, prompt_title, is_default, prompt_text, email_template, created_at, updated_at
     FROM prompts
     WHERE prompt_id = ?
   """
 
   GET_DEFAULT_PROMPT = """
-    SELECT prompt_text FROM prompts WHERE is_default = 1 LIMIT 1
+    SELECT prompt_text, email_template FROM prompts WHERE is_default = 1 LIMIT 1
   """
 
   UPSERT_PROMPT = """
-    INSERT INTO prompts (prompt_id, prompt_title, prompt_text, is_default)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO prompts (prompt_id, prompt_title, prompt_text, email_template, is_default)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(prompt_id) DO UPDATE SET
         prompt_title = excluded.prompt_title,
         prompt_text = excluded.prompt_text,
+        email_template = COALESCE(excluded.email_template, prompts.email_template),
         is_default = excluded.is_default,
         updated_at = CURRENT_TIMESTAMP
   """

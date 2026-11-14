@@ -35,6 +35,12 @@ class DatabaseManager:
 
       conn.executescript(DatabaseQueries.CREATE_TABLES)
 
+      # Migration safeguard: if prompts table is missing email_template column, migrate it
+      p_cursor = conn.execute("PRAGMA table_info(prompts)")
+      p_columns = [row["name"] for row in p_cursor.fetchall()]
+      if p_columns and "email_template" not in p_columns:
+        conn.execute("ALTER TABLE prompts ADD COLUMN email_template TEXT")
+
       # Seed default prompt if not already present
       conn.execute(
           DatabaseQueries.SEED_DEFAULT_PROMPT,
@@ -42,7 +48,14 @@ class DatabaseManager:
               DatabaseQueries.DEFAULT_PROMPT_ID,
               DatabaseQueries.DEFAULT_PROMPT_TITLE,
               DatabaseQueries.DEFAULT_PROMPT_TEXT,
+              DatabaseQueries.DEFAULT_EMAIL_TEMPLATE,
           ),
+      )
+
+      # Ensure existing default prompt has email_template populated
+      conn.execute(
+          """UPDATE prompts SET email_template = ? WHERE prompt_id = ? AND (email_template IS NULL OR email_template = '')""",
+          (DatabaseQueries.DEFAULT_EMAIL_TEMPLATE, DatabaseQueries.DEFAULT_PROMPT_ID),
       )
 
       # Backfill any existing channel missing author metadata
@@ -84,18 +97,34 @@ class DatabaseManager:
 
     return DatabaseQueries.DEFAULT_PROMPT_TEXT
 
+  def get_email_template(self, prompt_id: Optional[str] = None) -> str:
+    """Retrieves email HTML template by prompt_id or falls back to default."""
+    with self.get_connection() as conn:
+      if prompt_id:
+        row = conn.execute(DatabaseQueries.GET_PROMPT_DETAILS, (prompt_id,)).fetchone()
+        if row and row["email_template"]:
+          return row["email_template"]
+
+      # Fallback to default prompt
+      default_row = conn.execute(DatabaseQueries.GET_DEFAULT_PROMPT).fetchone()
+      if default_row and default_row["email_template"]:
+        return default_row["email_template"]
+
+    return DatabaseQueries.DEFAULT_EMAIL_TEMPLATE
+
   def upsert_prompt(
       self,
       prompt_id: str,
       prompt_title: str,
       prompt_text: str,
+      email_template: Optional[str] = None,
       is_default: int = 0,
   ):
-    """Inserts or updates a prompt template in the database."""
+    """Inserts or updates a prompt template and its email HTML layout in the database."""
     with self.get_connection() as conn:
       conn.execute(
           DatabaseQueries.UPSERT_PROMPT,
-          (prompt_id, prompt_title, prompt_text, is_default),
+          (prompt_id, prompt_title, prompt_text, email_template, is_default),
       )
       conn.commit()
 

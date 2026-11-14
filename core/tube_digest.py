@@ -230,46 +230,62 @@ class TubeDigest:
       )
       return None
 
-  def send_email(self, subject: str, markdown_content: str, video_url: str, video_id: str) -> bool:
-    """Sends a formatted HTML email with thumbnail and video link."""
+  def send_email(
+      self,
+      subject: str,
+      markdown_content: str,
+      video_url: str,
+      video_id: str,
+      email_template: Optional[str] = None,
+  ) -> bool:
+    """Sends a formatted HTML email with thumbnail and video link using the specified template."""
     try:
       html_body = markdown.markdown(
           markdown_content, extensions=["extra", "nl2br"]
       )
       thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
 
-      email_html = f"""
-            <html>
-              <head>
-                <style>
-                  body {{ font-family: Arial, sans-serif; color: #333; line-height: 1.6; }}
-                  h1 {{ color: #1a73e8; font-size: 22px; border-bottom: 2px solid #1a73e8; padding-bottom: 5px; }}
-                  h2, h3, h4 {{ color: #444; margin-top: 20px; }}
-                  ul {{ padding-left: 20px; }}
-                  strong {{ color: #000; }}
-                  .video-box {{ text-align: center; margin-bottom: 20px; }}
-                  .thumbnail {{ max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #ccc; display: block; margin: 0 auto; }}
-                  .container {{ background-color: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #ddd; }}
-                  .footer-link {{ margin-top: 25px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 14px; }}
-                </style>
-              </head>
-              <body>
-                <h2>New video published!</h2>
-                <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
-                <div class="video-box">
-                  <a href="{video_url}" target="_blank">
-                    <img src="{thumbnail_url}" alt="{subject}" class="thumbnail" />
-                  </a>
-                </div>
-                <div class="container">
-                  {html_body}
-                  <div class="footer-link">
-                    <a href="{video_url}" target="_blank">Watch video on YouTube</a>
-                  </div>
-                </div>
-              </body>
-            </html>
-            """
+      template = email_template or """<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; }
+      h1 { color: #1a73e8; font-size: 22px; border-bottom: 2px solid #1a73e8; padding-bottom: 5px; }
+      h2, h3, h4 { color: #444; margin-top: 20px; }
+      ul { padding-left: 20px; }
+      strong { color: #000; }
+      .video-box { text-align: center; margin-bottom: 20px; }
+      .thumbnail { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #ccc; display: block; margin: 0 auto; }
+      .container { background-color: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #ddd; }
+      .footer-link { margin-top: 25px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <h2>New video published!</h2>
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
+    <div class="video-box">
+      <a href="{video_url}" target="_blank">
+        <img src="{thumbnail_url}" alt="{subject}" class="thumbnail" />
+      </a>
+    </div>
+    <div class="container">
+      {html_body}
+      <div class="footer-link">
+        <a href="{video_url}" target="_blank">Watch video on YouTube</a>
+      </div>
+    </div>
+  </body>
+</html>"""
+
+      # Clean token substitution that never collides with CSS braces
+      email_html = (
+          template.replace("{subject}", subject)
+          .replace("{video_url}", video_url)
+          .replace("{thumbnail_url}", thumbnail_url)
+          .replace("{html_body}", html_body)
+          .replace("{video_id}", video_id)
+      )
 
       msg = MIMEMultipart("alternative")
       msg["Subject"] = subject
@@ -290,14 +306,14 @@ class TubeDigest:
       server.quit()
 
       if self.state_manager:
-        self.state_manager.log_message(f"Email digest sent successfully for '{subject}'.")
+        self.state_manager.log_message(f"[{subject}] Email digest sent successfully for '{subject}'.")
       else:
-        print(f"Email digest sent successfully for '{subject}'.")
+        print(f"[{subject}] Email digest sent successfully for '{subject}'.")
       return True
 
     except Exception as e:
       self._report_error(
-          f"Failed to send email digest for '{subject}'. Check SMTP credentials and network connection.",
+          f"[{subject}] Failed to send email digest for '{subject}'. Check SMTP credentials and network connection.",
           exc=e,
       )
       return False

@@ -178,9 +178,13 @@ def handle_cli_channels(
         f"{'Is Default':<14}: {is_def}",
         f"{'Updated At':<14}: {prompt.get('updated_at') or '-'}",
         sub_divider,
-        "Template Content:",
+        "AI Summary Prompt Template:",
         sub_divider,
         prompt["prompt_text"],
+        sub_divider,
+        "Email HTML Layout Template:",
+        sub_divider,
+        prompt.get("email_template") or "(Using default system HTML layout)",
         divider + "\n",
     ]
     state_manager.log_message("\n".join(lines))
@@ -414,8 +418,15 @@ def process_single_video(
       return False
 
     email_subject = f"{detected_channel_title or channel_label} - {video_title}"
+    email_template = db.get_email_template(prompt_id)
     state_manager.log_message(f"[{channel_label}] Sending email...")
-    email_sent = digest.send_email(email_subject, sunto_markdown, video_url, video_id)
+    email_sent = digest.send_email(
+        email_subject,
+        sunto_markdown,
+        video_url,
+        video_id,
+        email_template=email_template,
+    )
 
     if not email_sent:
       state_manager.log_message(
