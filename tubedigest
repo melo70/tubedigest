@@ -285,8 +285,8 @@ def handle_cli_channels(
       rows.append([
           UI.badge_active(ch["is_active"]),
           UI.cyan(ch["channel_id"]),
-          (ch["channel_name"] or "Unknown")[:23],
-          (ch.get("author_name") or "-")[:18],
+          (ch["channel_name"] or "Unknown"),
+          (ch.get("author_name") or "-"),
           UI.magenta(ch.get("prompt_id") or "default"),
       ])
     table = UI.draw_table("Tracked YouTube Channels (SQLite)", headers, rows)
@@ -368,9 +368,9 @@ def handle_cli_channels(
           UI.cyan(v["video_id"]),
           UI.badge_status(v.get("status")),
           UI.badge_yes_no((v.get("summary_len") or 0) > 0),
-          (v.get("channel_name") or "-")[:18],
-          str(v.get("created_at") or "-")[:19],
-          (v.get("video_title") or "Unknown Title")[:38],
+          (v.get("channel_name") or "-"),
+          str(v.get("created_at") or "-"),
+          (v.get("video_title") or "Unknown Title"),
       ])
     table = UI.draw_table("Archived Video Summaries (SQLite)", headers, rows)
     footer = [
