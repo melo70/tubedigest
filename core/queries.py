@@ -302,6 +302,10 @@ class DatabaseQueries:
     WHERE video_id = ?
   """
 
+  DELETE_PROCESSED_VIDEO = """
+    DELETE FROM processed_videos WHERE video_id = ?
+  """
+
   SAVE_PROCESSED_VIDEO = f"""
     INSERT INTO processed_videos (
         video_id, channel_id, video_title, video_url, duration_seconds, transcript, summary_markdown, status, email_sent_at

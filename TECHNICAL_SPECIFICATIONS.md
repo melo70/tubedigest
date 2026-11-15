@@ -85,6 +85,7 @@ Database logic is split between domain data types, a dedicated SQL query reposit
   * `is_video_processed(video_id)`: Instant index lookup preventing duplicate processing.
   * `get_processed_video(video_id)`: Returns stored video record including processing status, cached summary, and channel/author details.
   * `list_processed_videos()`: Returns all processed video records joined with channel and author metadata.
+  * `remove_processed_video(video_id)`: Deletes an archived video record and its transcript/summary from SQLite by video ID, returning the deleted video's metadata or None if not found.
   * `get_pending_email_videos(...)`: Retrieves videos in `PENDING_EMAIL` status for email delivery recovery.
   * `get_pending_summary_videos(...)`: Retrieves videos in `PENDING_SUMMARY` status for AI summarization recovery with cached transcripts.
   * `mark_video_completed(video_id)`: Updates status to `COMPLETED` and stamps `email_sent_at`.
@@ -124,7 +125,7 @@ The main entry point coordinates CLI management and pipeline execution:
 1. **Global Exception Interception (`sys.excepthook`)**: Captures unhandled crashes globally. Prevents terminal clutter by displaying polite error summaries on screen while logging complete diagnostic tracebacks as `[CRITICAL]` in `logs/tubedigest.log`.
 2. **Early State & Logging Setup**: Loads `config.toml` and initializes `StateManager` so all subsequent operations are traced.
 3. **Database Setup**: Connects to SQLite (`DatabaseManager`), handling channel and prompt migrations.
-4. **CLI Handler**: Processes `--add-channel`, `--disable-channel` (or `--deactivate-channel`), `--enable-channel` (or `--activate-channel`), `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, `--show-prompt`, `--video` (or `-v`), `--list-videos` (or `--list-summaries`), `--show-summary`, `--export-markdown` (or `--export-summary`), and `--show-transcript` arguments.
+4. **CLI Handler**: Processes `--add-channel`, `--disable-channel` (or `--deactivate-channel`), `--enable-channel` (or `--activate-channel`), `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, `--show-prompt`, `--video` (or `-v`), `--list-videos` (or `--list-summaries`), `--show-summary`, `--export-markdown` (or `--export-summary`), `--show-transcript`, and `--delete-video` (or `--remove-video`) arguments.
 5. **Two-Tier Resilient Pipeline**: Iterates through active channels (or single target channel via `--channel` / `-c`, or target individual video via `--video`), executing a resilient two-tier recovery mechanism:
    * **Tier 1 (AI Recovery - `PENDING_SUMMARY`)**: Re-attempts Gemini summarization using SQLite-cached transcripts, eliminating unnecessary YouTube subtitle downloads.
    * **Tier 2 (Email Recovery - `PENDING_EMAIL`)**: Re-attempts SMTP delivery using SQLite-cached Markdown summaries, bypassing both YouTube downloads and Gemini API calls.

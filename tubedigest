@@ -32,6 +32,7 @@ Usage:
       ./tubedigest --show-summary <VIDEO_ID_OR_URL>
       ./tubedigest --export-markdown <VIDEO_ID_OR_URL> [--output <PATH>]
       ./tubedigest --show-transcript <VIDEO_ID_OR_URL>
+      ./tubedigest --delete-video <VIDEO_ID_OR_URL>
 """
 
 import os
@@ -382,7 +383,8 @@ def handle_cli_channels(
         table,
         f"  {UI.bold('Total:')} {len(videos)} video(s)\n",
         UI.tip("View summary:    ./tubedigest --show-summary <VIDEO_ID>"),
-        UI.tip("Export markdown: ./tubedigest --export-markdown <VIDEO_ID> [--output <PATH>]\n"),
+        UI.tip("Export markdown: ./tubedigest --export-markdown <VIDEO_ID> [--output <PATH>]"),
+        UI.tip("Delete video:    ./tubedigest --delete-video <VIDEO_ID>\n"),
     ]
     state_manager.log_message("\n".join(footer))
     return True
@@ -548,6 +550,27 @@ def handle_cli_channels(
     panel_meta = UI.draw_panel("Video Metadata", meta)
     panel_text = UI.draw_panel("Raw Transcript Text", transcript.strip())
     state_manager.log_message("\n" + panel_meta + "\n\n" + panel_text + "\n")
+    return True
+
+  if args.delete_video:
+    video_id = extract_video_id(args.delete_video)
+    if not video_id:
+      state_manager.log_error(
+          f"Invalid YouTube video identifier '{args.delete_video}'. Please provide an 11-character Video ID or a valid YouTube URL."
+      )
+      return True
+
+    deleted_info = db.remove_processed_video(video_id)
+    if not deleted_info:
+      state_manager.log_error(f"Video '{video_id}' not found in processed videos archive.")
+      state_manager.log_message(UI.tip("List available videos: ./tubedigest --list-videos"))
+      return True
+
+    title = deleted_info.get("video_title") or f"Video ({video_id})"
+    state_manager.log_message(
+        UI.success(f"Video '{UI.bold(title)}' ({UI.cyan(video_id)}) was successfully removed from SQLite database.")
+    )
+    state_manager.log_message(UI.tip(f"To re-process this video now, run: ./tubedigest --video {video_id}\n"))
     return True
 
   return False
@@ -1024,6 +1047,13 @@ def main():
       dest="show_transcript",
       metavar="VIDEO",
       help="Display the raw transcript text for an archived video (by Video ID or URL).",
+  )
+  parser.add_argument(
+      "--delete-video",
+      "--remove-video",
+      dest="delete_video",
+      metavar="VIDEO",
+      help="Delete an archived video and its transcript/summary from SQLite database (by Video ID or URL).",
   )
 
   args = parser.parse_args()

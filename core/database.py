@@ -412,6 +412,22 @@ class DatabaseManager:
       conn.commit()
       return cur.rowcount > 0
 
+  def remove_processed_video(self, video_id: str) -> Optional[Dict[str, Any]]:
+    """Deletes an archived video from the database by its video_id.
+
+    Returns a dictionary of deleted video metadata, or None if not found.
+    """
+    video = self.get_processed_video(video_id)
+    if not video:
+      return None
+
+    with self.get_connection() as conn:
+      cur = conn.execute(DatabaseQueries.DELETE_PROCESSED_VIDEO, (video_id,))
+      conn.commit()
+      if cur.rowcount > 0:
+        return video
+    return None
+
   def save_processed_video(
       self,
       video_id: str,
