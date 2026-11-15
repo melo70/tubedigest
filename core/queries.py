@@ -1,5 +1,7 @@
 """SQL queries and schema definitions for the TubeDigest SQLite database."""
 
+from core.models import VideoStatus
+
 
 class DatabaseQueries:
   """Centralized SQL query store for DatabaseManager."""
@@ -10,7 +12,7 @@ class DatabaseQueries:
   # ----------------------------------------------------------------------------
   # DDL: Schema Initialization
   # ----------------------------------------------------------------------------
-  CREATE_TABLES = """
+  CREATE_TABLES = f"""
     CREATE TABLE IF NOT EXISTS prompts (
         prompt_id           TEXT PRIMARY KEY,
         prompt_title        TEXT,
@@ -48,7 +50,7 @@ class DatabaseQueries:
         video_url           TEXT,
         transcript          TEXT,
         summary_markdown    TEXT,
-        status              TEXT DEFAULT 'COMPLETED',
+        status              TEXT DEFAULT '{VideoStatus.COMPLETED}',
         email_sent_at       TIMESTAMP,
         created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (channel_id) REFERENCES channels (channel_id) ON DELETE CASCADE
@@ -219,8 +221,8 @@ class DatabaseQueries:
   # ----------------------------------------------------------------------------
   # Video Archive Queries
   # ----------------------------------------------------------------------------
-  IS_VIDEO_PROCESSED = """
-    SELECT 1 FROM processed_videos WHERE video_id = ? AND status = 'COMPLETED'
+  IS_VIDEO_PROCESSED = f"""
+    SELECT 1 FROM processed_videos WHERE video_id = ? AND status = '{VideoStatus.COMPLETED}'
   """
 
   GET_PROCESSED_VIDEO = """
@@ -262,45 +264,45 @@ class DatabaseQueries:
     ORDER BY v.created_at
   """
 
-  GET_PENDING_EMAIL_VIDEOS = """
+  GET_PENDING_EMAIL_VIDEOS = f"""
     SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
     FROM processed_videos
-    WHERE status = 'PENDING_EMAIL' AND channel_id = ?
+    WHERE status = '{VideoStatus.PENDING_EMAIL}' AND channel_id = ?
     ORDER BY created_at ASC
   """
 
-  GET_ALL_PENDING_EMAIL_VIDEOS = """
+  GET_ALL_PENDING_EMAIL_VIDEOS = f"""
     SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
     FROM processed_videos
-    WHERE status = 'PENDING_EMAIL'
+    WHERE status = '{VideoStatus.PENDING_EMAIL}'
     ORDER BY created_at ASC
   """
 
-  GET_PENDING_SUMMARY_VIDEOS = """
+  GET_PENDING_SUMMARY_VIDEOS = f"""
     SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
     FROM processed_videos
-    WHERE status = 'PENDING_SUMMARY' AND channel_id = ?
+    WHERE status = '{VideoStatus.PENDING_SUMMARY}' AND channel_id = ?
     ORDER BY created_at ASC
   """
 
-  GET_ALL_PENDING_SUMMARY_VIDEOS = """
+  GET_ALL_PENDING_SUMMARY_VIDEOS = f"""
     SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
     FROM processed_videos
-    WHERE status = 'PENDING_SUMMARY'
+    WHERE status = '{VideoStatus.PENDING_SUMMARY}'
     ORDER BY created_at ASC
   """
 
-  MARK_VIDEO_COMPLETED = """
+  MARK_VIDEO_COMPLETED = f"""
     UPDATE processed_videos
-    SET status = 'COMPLETED',
+    SET status = '{VideoStatus.COMPLETED}',
         email_sent_at = CURRENT_TIMESTAMP
     WHERE video_id = ?
   """
 
-  SAVE_PROCESSED_VIDEO = """
+  SAVE_PROCESSED_VIDEO = f"""
     INSERT INTO processed_videos (
         video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'COMPLETED' THEN CURRENT_TIMESTAMP ELSE NULL END)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = '{VideoStatus.COMPLETED}' THEN CURRENT_TIMESTAMP ELSE NULL END)
     ON CONFLICT(video_id) DO UPDATE SET
         channel_id = excluded.channel_id,
         video_title = COALESCE(excluded.video_title, processed_videos.video_title),
@@ -308,5 +310,5 @@ class DatabaseQueries:
         transcript = COALESCE(excluded.transcript, processed_videos.transcript),
         summary_markdown = COALESCE(excluded.summary_markdown, processed_videos.summary_markdown),
         status = excluded.status,
-        email_sent_at = CASE WHEN excluded.status = 'COMPLETED' THEN CURRENT_TIMESTAMP ELSE processed_videos.email_sent_at END
+        email_sent_at = CASE WHEN excluded.status = '{VideoStatus.COMPLETED}' THEN CURRENT_TIMESTAMP ELSE processed_videos.email_sent_at END
   """

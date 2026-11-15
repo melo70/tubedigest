@@ -1,8 +1,9 @@
 import os
 import sqlite3
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 
 from core.queries import DatabaseQueries
+from core.models import VideoStatus
 
 
 class DatabaseManager:
@@ -413,9 +414,10 @@ class DatabaseManager:
       video_url: str,
       transcript: Optional[str] = None,
       summary_markdown: Optional[str] = None,
-      status: str = "COMPLETED",
+      status: Union[VideoStatus, str] = VideoStatus.COMPLETED,
   ):
     """Archives or updates a processed video, transcript, and summary in SQLite."""
+    status_str = str(status)
     with self.get_connection() as conn:
       conn.execute(
           DatabaseQueries.SAVE_PROCESSED_VIDEO,
@@ -426,8 +428,8 @@ class DatabaseManager:
               video_url,
               transcript,
               summary_markdown,
-              status,
-              status,
+              status_str,
+              status_str,
           ),
       )
       conn.commit()

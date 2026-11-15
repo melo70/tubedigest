@@ -12,6 +12,8 @@ import sys
 import textwrap
 from typing import List, Optional, Tuple
 
+from core.models import VideoStatus
+
 ANSI_REGEX = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
 
@@ -191,16 +193,16 @@ class UI:
   @classmethod
   def badge_status(cls, status: str) -> str:
     """Returns a color-coded status indicator."""
-    st = (status or "").upper()
-    if st == "COMPLETED":
+    st = (str(status) if status else "").upper()
+    if st == VideoStatus.COMPLETED:
       return f"{cls.green('● COMPLETED')}"
-    elif st == "PENDING_EMAIL":
+    elif st == VideoStatus.PENDING_EMAIL:
       return f"{cls.yellow('⏳ PEND_EMAIL')}"
-    elif st == "PENDING_SUMMARY":
+    elif st == VideoStatus.PENDING_SUMMARY:
       return f"{cls.yellow('⏳ PENDING_AI')}"
     elif st == "PENDING":
       return f"{cls.yellow('⏳ PENDING  ')}"
-    elif st == "NO_TRANSCRIPT":
+    elif st == VideoStatus.NO_TRANSCRIPT:
       return f"{cls.gray('○ NO_SUBS  ')}"
     return f"{cls.magenta(st[:12])}"
 

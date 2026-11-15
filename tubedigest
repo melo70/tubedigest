@@ -64,6 +64,7 @@ from core.state_manager import StateManager
 from core.tube_digest import TubeDigest
 from core.database import DatabaseManager
 from core.ui import UI
+from core.models import VideoStatus
 
 CONFIG_FILE = "config.toml"
 _ACTIVE_STATE_MANAGER: Optional[StateManager] = None
@@ -408,7 +409,7 @@ def handle_cli_channels(
     author_str = f" ({author})" if author and author != "-" and author != channel else ""
     channel_display = f"{channel}{author_str}"
     url = v.get("video_url") or f"https://www.youtube.com/watch?v={video_id}"
-    status = v.get("status") or "COMPLETED"
+    status = v.get("status") or VideoStatus.COMPLETED
     created = v.get("created_at") or "-"
     sent_at = v.get("email_sent_at") or "-"
 
@@ -586,17 +587,17 @@ def process_single_video(
 
   if existing_video:
     v_status = existing_video.get("status")
-    if v_status == "COMPLETED":
+    if v_status == VideoStatus.COMPLETED:
       state_manager.log_message(
           f"{tag} Video '{video_title}' ({UI.cyan(video_id)}) already processed."
       )
       return True
-    elif v_status == "NO_TRANSCRIPT":
+    elif v_status == VideoStatus.NO_TRANSCRIPT:
       state_manager.log_message(
           f"{tag} Video '{video_title}' ({UI.cyan(video_id)}) has no transcript available (previously archived)."
       )
       return True
-    elif v_status == "PENDING_EMAIL":
+    elif v_status == VideoStatus.PENDING_EMAIL:
       state_manager.log_message(
           f"{tag} Found video '{video_title}' ({UI.cyan(video_id)}) with cached summary awaiting email dispatch. Checking recovery..."
       )
@@ -632,7 +633,7 @@ def process_single_video(
             f"{tag} Email dispatch failed; video remains in PENDING_EMAIL state."
         )
         return False
-    elif v_status == "PENDING_SUMMARY":
+    elif v_status == VideoStatus.PENDING_SUMMARY:
       cached_transcript = existing_video.get("transcript") or ""
       if cached_transcript:
         state_manager.log_message(
@@ -664,7 +665,7 @@ def process_single_video(
           video_url=video_url,
           transcript=transcript,
           summary_markdown="",
-          status="PENDING_SUMMARY",
+          status=VideoStatus.PENDING_SUMMARY,
       )
       state_manager.log_error(
           f"{tag} Summarization failed; transcript cached as PENDING_SUMMARY in DB. Will retry on next run without re-downloading transcript."
@@ -683,7 +684,7 @@ def process_single_video(
           video_url=video_url,
           transcript=transcript,
           summary_markdown=sunto_markdown,
-          status="PENDING_EMAIL",
+          status=VideoStatus.PENDING_EMAIL,
       )
       state_manager.log_error(
           f"{tag} Email template missing or blank in database for prompt '{prompt_id}'. Video summary cached as PENDING_EMAIL for automatic recovery on next run."
@@ -709,7 +710,7 @@ def process_single_video(
           video_url=video_url,
           transcript=transcript,
           summary_markdown=sunto_markdown,
-          status="PENDING_EMAIL",
+          status=VideoStatus.PENDING_EMAIL,
       )
       state_manager.log_message(
           f"{tag} Email dispatch failed; video summary cached as PENDING_EMAIL for automatic recovery on next run."
@@ -724,7 +725,7 @@ def process_single_video(
         video_url=video_url,
         transcript=transcript,
         summary_markdown=sunto_markdown,
-        status="COMPLETED",
+        status=VideoStatus.COMPLETED,
     )
     state_manager.log_message(f"{tag} {UI.success('Video archived and processed successfully!')}")
     state_manager.log_message(UI.gray("─" * 60))
@@ -740,7 +741,7 @@ def process_single_video(
         video_url=video_url,
         transcript="",
         summary_markdown="",
-        status="NO_TRANSCRIPT",
+        status=VideoStatus.NO_TRANSCRIPT,
     )
     return True
 

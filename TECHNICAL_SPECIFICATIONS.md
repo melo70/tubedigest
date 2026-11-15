@@ -34,6 +34,7 @@ The project is structured with an internal `core/` package divided into the foll
 │   └── .gitkeep
 ├── /core                    # Python package for internal application modules
 │   ├── __init__.py          # Package initializer
+│   ├── models.py            # Data models and lifecycle enumerated types (VideoStatus StrEnum)
 │   ├── ui.py                # UI styling, ASCII art banner, Unicode box-drawing, and ANSI color support
 │   ├── queries.py           # DatabaseQueries class (centralized SQL store)
 │   ├── database.py          # DatabaseManager module (SQLite channels, authors, prompts, and archive)
@@ -57,10 +58,11 @@ The configuration file must contain the following sections and keys:
 
 ---
 
-### 4.2. Database & SQL Architecture (`core/queries.py` & `core/database.py`)
+### 4.2. Database & SQL Architecture (`core/models.py`, `core/queries.py` & `core/database.py`)
 
-Database logic is split between a dedicated SQL query repository and an operational manager:
+Database logic is split between domain data types, a dedicated SQL query repository, and an operational manager:
 
+* **`VideoStatus` (`core/models.py`)**: Type-safe `StrEnum` defining all video processing lifecycle states (`COMPLETED`, `PENDING_SUMMARY`, `PENDING_EMAIL`, `NO_TRANSCRIPT`), eliminating raw magic strings across the codebase.
 * **`DatabaseQueries` (`core/queries.py`)**: Centralized repository containing all DDL and DML statements, isolating raw SQL from Python logic.
 * **`DatabaseManager` (`core/database.py`)**: Executes queries, handles connections, transactions, and foreign keys.
 * **Schema Tables**:
