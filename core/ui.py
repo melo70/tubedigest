@@ -346,3 +346,269 @@ class UI:
 
     res.append(cls.gray("╰" + (dash * inner_width) + "╯"))
     return "\n".join(res)
+
+  @classmethod
+  def supports_color(cls) -> bool:
+    return supports_color()
+
+  @classmethod
+  def render_inline(cls, s: str) -> str:
+    """Renders inline Markdown formatting (bold, italic, code, links) to terminal styles."""
+    if not s:
+      return ""
+
+    if not supports_color():
+      # Cleanly strip markdown formatting markers when colors are disabled
+      s = re.sub(r"\*\*\*(.*?)\*\*\*", r"\1", s)
+      s = re.sub(r"___(.*?)___", r"\1", s)
+      s = re.sub(r"\*\*(.*?)\*\*", r"\1", s)
+      s = re.sub(r"__(.*?)__", r"\1", s)
+      s = re.sub(r"\*(.*?)\*", r"\1", s)
+      s = re.sub(r"_(.*?)_", r"\1", s)
+      s = re.sub(r"`(.*?)`", r"\1", s)
+      s = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1 (\2)", s)
+      return s
+
+    # 1. Inline code: `code`
+    s = re.sub(r"`(.*?)`", lambda m: f"{cls.CYAN}{m.group(1)}{cls.RESET}", s)
+    # 2. Bold italic: ***text*** or ___text___
+    s = re.sub(r"\*\*\*(.*?)\*\*\*", lambda m: f"{cls.BOLD}\033[3m{m.group(1)}{cls.RESET}", s)
+    s = re.sub(r"___(.*?)___", lambda m: f"{cls.BOLD}\033[3m{m.group(1)}{cls.RESET}", s)
+    # 3. Bold: **text** or __text__
+    s = re.sub(r"\*\*(.*?)\*\*", lambda m: f"{cls.BOLD}{cls.WHITE}{m.group(1)}{cls.RESET}", s)
+    s = re.sub(r"__(.*?)__", lambda m: f"{cls.BOLD}{cls.WHITE}{m.group(1)}{cls.RESET}", s)
+    # 4. Italic: *text* or _text_
+    s = re.sub(r"\*(.*?)\*", lambda m: f"\033[3m{m.group(1)}{cls.RESET}", s)
+    s = re.sub(r"(?<!\w)_(.*?)_(?!\w)", lambda m: f"\033[3m{m.group(1)}{cls.RESET}", s)
+    # 5. Markdown links: [text](url)
+    s = re.sub(r"\[(.*?)\]\((.*?)\)", lambda m: f"\033[4m{m.group(1)}{cls.RESET} ({cls.BLUE}{m.group(2)}{cls.RESET})", s)
+    return s
+
+  @classmethod
+  def draw_wrapped_table(
+      cls,
+      title: str,
+      headers: List[str],
+      rows: List[List[str]],
+      max_width: int = 80,
+  ) -> str:
+    """Draws a responsive Unicode table wrapping cell text to fit max_width."""
+    cols = len(headers)
+    if cols == 0:
+      return ""
+
+    total_inner = max_width - 2
+    usable_width = total_inner - (cols - 1)
+
+    raw_col_lens = [max(visible_len(h), 6) for h in headers]
+    for row in rows:
+      for i, c in enumerate(row):
+        if i < cols:
+          raw_col_lens[i] = max(raw_col_lens[i], min(visible_len(c), 45))
+    total_raw = sum(raw_col_lens) or 1
+
+    col_widths = [max(8, int(usable_width * (l / total_raw))) for l in raw_col_lens]
+    delta = usable_width - sum(col_widths)
+    col_widths[-1] += delta
+    dash = "─"
+
+    lines = []
+    title_visible = visible_len(title)
+    if title:
+      dash_count = total_inner - title_visible - 3
+      lines.append(
+          cls.gray("╭─ ") + cls.bold(cls.cyan(title)) + " " + cls.gray(dash * max(0, dash_count) + "╮")
+      )
+    else:
+      top_cells = [dash * w for w in col_widths]
+      lines.append(cls.gray("╭" + "┬".join(top_cells) + "╮"))
+
+    # Wrapped headers
+    wrapped_headers = [
+        textwrap.wrap(h, width=max(4, col_widths[i] - 2)) or [""]
+        for i, h in enumerate(headers)
+    ]
+    max_h_sub = max(len(c) for c in wrapped_headers)
+    for line_idx in range(max_h_sub):
+      parts = []
+      for i, c_lines in enumerate(wrapped_headers):
+        w = col_widths[i]
+        text_part = c_lines[line_idx] if line_idx < len(c_lines) else ""
+        pad = w - visible_len(text_part) - 1
+        parts.append(" " + cls.bold(cls.white(text_part)) + (" " * max(0, pad)))
+      lines.append(cls.gray("│") + cls.gray("│").join(parts) + cls.gray("│"))
+
+    sep_cells = [dash * w for w in col_widths]
+    lines.append(cls.gray("├" + "┼".join(sep_cells) + "┤"))
+
+    # Rows
+    for row in rows:
+      wrapped_cells = []
+      for i, val in enumerate(row):
+        w = col_widths[i] if i < len(col_widths) else 10
+        content_w = max(4, w - 2)
+        sub = textwrap.wrap(val, width=content_w) or [""]
+        wrapped_cells.append(sub)
+
+      max_sub = max(len(c) for c in wrapped_cells)
+      for line_idx in range(max_sub):
+        line_parts = []
+        for i, c_lines in enumerate(wrapped_cells):
+          w = col_widths[i]
+          text_part = c_lines[line_idx] if line_idx < len(c_lines) else ""
+          pad = w - visible_len(text_part) - 1
+          line_parts.append(" " + text_part + (" " * max(0, pad)))
+        lines.append(cls.gray("│") + cls.gray("│").join(line_parts) + cls.gray("│"))
+
+      lines.append(cls.gray("├" + "┼".join(sep_cells) + "┤"))
+
+    lines[-1] = cls.gray("╰" + "┴".join(sep_cells) + "╯")
+    return "\n".join(lines)
+
+  @classmethod
+  def render_markdown(cls, md_text: str, width: Optional[int] = None) -> str:
+    """Renders a Markdown document into beautiful, colorized terminal text."""
+    if not md_text:
+      return ""
+
+    term_cols = shutil.get_terminal_size((80, 24)).columns
+    target_width = width or min(max(term_cols, 78), 100)
+
+    lines = md_text.splitlines()
+    out = []
+    i = 0
+    n = len(lines)
+
+    while i < n:
+      line = lines[i]
+      stripped = line.strip()
+
+      # 1. Blank line
+      if not stripped:
+        out.append("")
+        i += 1
+        continue
+
+      # 2. Code Block ```
+      if stripped.startswith("```"):
+        code_lines = []
+        i += 1
+        while i < n and not lines[i].strip().startswith("```"):
+          code_lines.append("  " + lines[i])
+          i += 1
+        if i < n:
+          i += 1
+        out.append(cls.draw_panel("Code", "\n".join(code_lines), width=target_width))
+        continue
+
+      # 3. Table (| Col 1 | Col 2 |)
+      if (
+          stripped.startswith("|")
+          and stripped.endswith("|")
+          and i + 1 < n
+          and ("---" in lines[i + 1] or ":--" in lines[i + 1])
+      ):
+        table_lines = []
+        while (
+            i < n
+            and lines[i].strip().startswith("|")
+            and lines[i].strip().endswith("|")
+        ):
+          table_lines.append(lines[i].strip())
+          i += 1
+        raw_headers = [c.strip() for c in table_lines[0].strip("|").split("|")]
+        headers = [cls.render_inline(h) for h in raw_headers]
+        rows = []
+        for r in table_lines[2:]:
+          cells = [cls.render_inline(c.strip()) for c in r.strip("|").split("|")]
+          rows.append(cells)
+        out.append("\n" + cls.draw_wrapped_table("", headers, rows, max_width=target_width) + "\n")
+        continue
+
+      # 4. Headings
+      if stripped.startswith("# "):
+        title = cls.render_inline(stripped[2:].strip())
+        out.append("\n" + cls.bold(cls.white(title)))
+        out.append(cls.cyan("═" * min(visible_len(title), target_width)))
+        i += 1
+        continue
+
+      if stripped.startswith("## "):
+        h2 = cls.render_inline(stripped[3:].strip())
+        out.append("\n" + cls.bold(cls.cyan(f"▸ {h2}")))
+        out.append(cls.gray("─" * target_width))
+        i += 1
+        continue
+
+      if stripped.startswith("### "):
+        h3 = cls.render_inline(stripped[4:].strip())
+        out.append("\n" + cls.bold(cls.yellow(f"  ▪ {h3}")))
+        i += 1
+        continue
+
+      if stripped.startswith("#### "):
+        h4 = cls.render_inline(stripped[5:].strip())
+        out.append("\n" + cls.bold(cls.white(f"    ▫ {h4}")))
+        i += 1
+        continue
+
+      # 5. Horizontal rule (--- or ***)
+      if stripped in ("---", "***", "___", "- - -", "* * *"):
+        out.append(cls.gray("─" * target_width))
+        i += 1
+        continue
+
+      # 6. Blockquote (> Quote)
+      if stripped.startswith(">"):
+        q_text = cls.render_inline(stripped.lstrip("> ").strip())
+        wrapped_q = textwrap.wrap(q_text, width=target_width - 6)
+        for ql in wrapped_q:
+          out.append(f"  {cls.gray('│')} {cls.dim(ql)}")
+        i += 1
+        continue
+
+      # 7. Unordered List (- , * , + )
+      m_list = re.match(r"^(\s*)([-*+])\s+(.*)$", line)
+      if m_list:
+        indent_spaces = len(m_list.group(1))
+        bullet_char = cls.cyan("•") if indent_spaces == 0 else cls.gray("◦")
+        item_text = cls.render_inline(m_list.group(3))
+        prefix_len = 2 + indent_spaces + 2
+        sub_indent = " " * prefix_len
+        wrapped = textwrap.wrap(item_text, width=target_width - prefix_len)
+        if wrapped:
+          out.append(" " * indent_spaces + f"  {bullet_char} " + wrapped[0])
+          for extra_l in wrapped[1:]:
+            out.append(sub_indent + extra_l)
+        else:
+          out.append(" " * indent_spaces + f"  {bullet_char}")
+        i += 1
+        continue
+
+      # 8. Numbered List (1. , 2. )
+      m_num = re.match(r"^(\s*)(\d+)\.\s+(.*)$", line)
+      if m_num:
+        indent_spaces = len(m_num.group(1))
+        num_str = m_num.group(2)
+        item_text = cls.render_inline(m_num.group(3))
+        prefix = " " * indent_spaces + f"  {cls.bold(num_str + '.')} "
+        prefix_len = 2 + indent_spaces + len(num_str) + 2
+        sub_indent = " " * prefix_len
+        wrapped = textwrap.wrap(item_text, width=target_width - prefix_len)
+        if wrapped:
+          out.append(prefix + wrapped[0])
+          for extra_l in wrapped[1:]:
+            out.append(sub_indent + extra_l)
+        else:
+          out.append(prefix)
+        i += 1
+        continue
+
+      # 9. Standard Paragraph
+      rendered_p = cls.render_inline(stripped)
+      wrapped_p = textwrap.wrap(rendered_p, width=target_width)
+      for pl in wrapped_p:
+        out.append(pl)
+      i += 1
+
+    return "\n".join(out)

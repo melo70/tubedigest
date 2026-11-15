@@ -132,6 +132,7 @@ The `UI` class centralizes all visual styling and TUI formatting:
 * **Retro-Futuristic ASCII Art Header**: Stylized raster block banner for `TUBEDIGEST` with a smooth horizontal 3-stop RGB gradient (Cyan -> Magenta -> Coral) and prompt indicator (`>`).
 * **Unicode Box-Drawing Tables**: Renders data tables with rounded corners (`╭─╮`, `╰─╯`, `│`, `├─┤`, `┼`) and aligned columns for channels, prompt templates, and video archives.
 * **Card Panels**: Renders bordered card containers with embedded titles (`draw_panel`) and automated text wrapping to fit within terminal width.
+* **Terminal Markdown Rendering Engine (`render_markdown`)**: Parses and renders Markdown syntax (headers, bold, italic, code, bullet/numbered lists with hanging indents, and wrapped Unicode comparison tables) into rich, beautifully formatted terminal output without third-party dependencies.
 * **Status Badges & Bullets**: Minimalist bullet indicators matching modern TUIs (`● Active`, `○ Disabled`, `● Yes`, `○ No`, `● COMPLETED`).
 * **ANSI Color Support & Safe Fallback**: Uses standard ANSI escape codes for colors, automatically disabling them when output is piped, redirected to a file, or when `NO_COLOR` is set.
 * **Clean Logging Integration**: Automatically strips all ANSI escape codes before writing output to `logs/tubedigest.log`.

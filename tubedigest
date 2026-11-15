@@ -46,8 +46,14 @@ if sys.prefix == sys.base_prefix and os.path.exists(_VENV_PYTHON):
 import argparse
 import datetime
 import re
+import shutil
+import signal
 import traceback
 from typing import Optional
+
+# Prevent BrokenPipeError when piping output to head or pager on POSIX systems
+if hasattr(signal, "SIGPIPE"):
+  signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 try:
   import tomllib  # Python 3.11+
@@ -65,8 +71,7 @@ _ACTIVE_STATE_MANAGER: Optional[StateManager] = None
 
 def global_exception_handler(exc_type, exc_value, exc_tb):
   """Intercepts uncaught exceptions globally, writing tracebacks to log file and clean messages to terminal."""
-  if issubclass(exc_type, KeyboardInterrupt):
-    sys.__excepthook__(exc_type, exc_value, exc_tb)
+  if issubclass(exc_type, (KeyboardInterrupt, BrokenPipeError)):
     return
 
   # Format human-friendly error details
@@ -417,8 +422,19 @@ def handle_cli_channels(
         f"{UI.bold('URL'):<18}: {UI.blue(url)}",
     ])
     panel_meta = UI.draw_panel("Video Metadata", meta)
-    panel_summary = UI.draw_panel("AI Summary (Markdown)", summary.strip())
-    state_manager.log_message("\n" + panel_meta + "\n\n" + panel_summary + "\n")
+    rendered_summary = UI.render_markdown(summary.strip())
+    term_w = shutil.get_terminal_size((80, 24)).columns
+    divider = UI.gray("─" * min(term_w, 100))
+    output_block = [
+        "",
+        panel_meta,
+        "",
+        rendered_summary,
+        "",
+        divider,
+        UI.tip(f"Export this markdown: ./tubedigest --export-markdown {video_id} [--output <PATH>]\n"),
+    ]
+    state_manager.log_message("\n".join(output_block))
     return True
 
   if args.export_markdown:
