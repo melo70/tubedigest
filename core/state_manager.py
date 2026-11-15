@@ -4,6 +4,7 @@ import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 from typing import Dict, Any, Optional
+from core.ui import strip_ansi
 
 ASCII_BANNER = r"""================================================================================
  _____      _            ____  _                 _   
@@ -90,10 +91,12 @@ class StateManager:
   def log_message(self, message: str):
     """Writes an informational message to stdout and appends it to the rotated log file."""
     print(message)
-    self.logger.info(message)
+    clean_message = strip_ansi(message)
+    self.logger.info(clean_message)
 
   def log_error(self, message: str, exc: Optional[BaseException] = None):
     """Prints a friendly error message to stderr and logs technical details with traceback to file."""
     print(f"⚠ {message}", file=sys.stderr)
-    error_msg = f"{message} - Exception: {exc}" if exc else message
+    clean_message = strip_ansi(message)
+    error_msg = f"{clean_message} - Exception: {exc}" if exc else clean_message
     self.logger.error(error_msg, exc_info=exc)

@@ -34,6 +34,7 @@ The project is structured with an internal `core/` package divided into the foll
 │   └── .gitkeep
 ├── /core                    # Python package for internal application modules
 │   ├── __init__.py          # Package initializer
+│   ├── ui.py                # UI styling, ASCII art banner, Unicode box-drawing, and ANSI color support
 │   ├── queries.py           # DatabaseQueries class (centralized SQL store)
 │   ├── database.py          # DatabaseManager module (SQLite channels, authors, prompts, and archive)
 │   ├── state_manager.py     # StateManager module (filesystem I/O and logging)
@@ -121,6 +122,19 @@ The main entry point coordinates CLI management and pipeline execution:
 3. **Database Setup**: Connects to SQLite (`DatabaseManager`), handling channel and prompt migrations.
 4. **CLI Handler**: Processes `--add-channel`, `--disable-channel` (or `--deactivate-channel`), `--enable-channel` (or `--activate-channel`), `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, `--show-prompt`, `--video` (or `-v`), `--list-videos` (or `--list-summaries`), `--show-summary`, `--export-markdown` (or `--export-summary`), and `--show-transcript` arguments.
 5. **Automated Pipeline**: Iterates through active channels (or single target channel via `--channel` / `-c`, or target individual video via `--video`), automatically recovering any `PENDING_EMAIL` videos whose templates are now configured, detecting new uploads, transcribing subtitles, prompting Gemini, delivering HTML emails, and persisting state into SQLite archives.
+
+---
+
+### 4.6. UI & Terminal Presentation Module (`core/ui.py` -> `UI`)
+
+The `UI` class centralizes all visual styling and TUI formatting:
+
+* **Retro-Futuristic ASCII Art Header**: Stylized raster block banner for `TUBEDIGEST` with a smooth horizontal 3-stop RGB gradient (Cyan -> Magenta -> Coral) and prompt indicator (`>`).
+* **Unicode Box-Drawing Tables**: Renders data tables with rounded corners (`╭─╮`, `╰─╯`, `│`, `├─┤`, `┼`) and aligned columns for channels, prompt templates, and video archives.
+* **Card Panels**: Renders bordered card containers with embedded titles (`draw_panel`) and automated text wrapping to fit within terminal width.
+* **Status Badges & Bullets**: Minimalist bullet indicators matching modern TUIs (`● Active`, `○ Disabled`, `● Yes`, `○ No`, `● COMPLETED`).
+* **ANSI Color Support & Safe Fallback**: Uses standard ANSI escape codes for colors, automatically disabling them when output is piped, redirected to a file, or when `NO_COLOR` is set.
+* **Clean Logging Integration**: Automatically strips all ANSI escape codes before writing output to `logs/tubedigest.log`.
 
 ---
 

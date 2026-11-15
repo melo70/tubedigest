@@ -11,6 +11,7 @@ import feedparser
 import markdown
 from youtube_transcript_api import YouTubeTranscriptApi
 from google import genai
+from core.ui import UI
 
 
 class TubeDigest:
@@ -281,9 +282,9 @@ class TubeDigest:
       server.quit()
 
       success_msg = (
-          f"[{channel_label}] Email digest sent successfully."
+          f"{UI.tag(channel_label)} {UI.success('Email digest sent successfully.')}"
           if channel_label
-          else f"Email digest sent successfully for '{subject}'."
+          else UI.success(f"Email digest sent successfully for '{subject}'.")
       )
 
       if self.state_manager:
