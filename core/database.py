@@ -383,6 +383,21 @@ class DatabaseManager:
         ).fetchall()
       return [dict(row) for row in rows]
 
+  def get_pending_summary_videos(
+      self, channel_id: Optional[str] = None
+  ) -> List[Dict[str, Any]]:
+    """Retrieves all videos awaiting Gemini AI summarization, optionally filtered by channel_id."""
+    with self.get_connection() as conn:
+      if channel_id:
+        rows = conn.execute(
+            DatabaseQueries.GET_PENDING_SUMMARY_VIDEOS, (channel_id,)
+        ).fetchall()
+      else:
+        rows = conn.execute(
+            DatabaseQueries.GET_ALL_PENDING_SUMMARY_VIDEOS
+        ).fetchall()
+      return [dict(row) for row in rows]
+
   def mark_video_completed(self, video_id: str) -> bool:
     """Marks a pending video as COMPLETED and timestamps its email dispatch."""
     with self.get_connection() as conn:
@@ -396,8 +411,8 @@ class DatabaseManager:
       channel_id: str,
       video_title: str,
       video_url: str,
-      transcript: str,
-      summary_markdown: str,
+      transcript: Optional[str] = None,
+      summary_markdown: Optional[str] = None,
       status: str = "COMPLETED",
   ):
     """Archives or updates a processed video, transcript, and summary in SQLite."""

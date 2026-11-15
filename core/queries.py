@@ -276,6 +276,20 @@ class DatabaseQueries:
     ORDER BY created_at ASC
   """
 
+  GET_PENDING_SUMMARY_VIDEOS = """
+    SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
+    FROM processed_videos
+    WHERE status = 'PENDING_SUMMARY' AND channel_id = ?
+    ORDER BY created_at ASC
+  """
+
+  GET_ALL_PENDING_SUMMARY_VIDEOS = """
+    SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
+    FROM processed_videos
+    WHERE status = 'PENDING_SUMMARY'
+    ORDER BY created_at ASC
+  """
+
   MARK_VIDEO_COMPLETED = """
     UPDATE processed_videos
     SET status = 'COMPLETED',

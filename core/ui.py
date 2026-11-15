@@ -195,10 +195,14 @@ class UI:
     if st == "COMPLETED":
       return f"{cls.green('● COMPLETED')}"
     elif st == "PENDING_EMAIL":
+      return f"{cls.yellow('⏳ PEND_EMAIL')}"
+    elif st == "PENDING_SUMMARY":
+      return f"{cls.yellow('⏳ PENDING_AI')}"
+    elif st == "PENDING":
       return f"{cls.yellow('⏳ PENDING  ')}"
     elif st == "NO_TRANSCRIPT":
       return f"{cls.gray('○ NO_SUBS  ')}"
-    return f"{cls.magenta(st[:11])}"
+    return f"{cls.magenta(st[:12])}"
 
   @classmethod
   def tag(cls, channel_label: str) -> str:

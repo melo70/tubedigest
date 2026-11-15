@@ -83,9 +83,10 @@ Database logic is split between a dedicated SQL query repository and an operatio
   * `is_video_processed(video_id)`: Instant index lookup preventing duplicate processing.
   * `get_processed_video(video_id)`: Returns stored video record including processing status, cached summary, and channel/author details.
   * `list_processed_videos()`: Returns all processed video records joined with channel and author metadata.
-  * `get_pending_email_videos(...)`: Retrieves videos in `PENDING_EMAIL` status for recovery.
+  * `get_pending_email_videos(...)`: Retrieves videos in `PENDING_EMAIL` status for email delivery recovery.
+  * `get_pending_summary_videos(...)`: Retrieves videos in `PENDING_SUMMARY` status for AI summarization recovery with cached transcripts.
   * `mark_video_completed(video_id)`: Updates status to `COMPLETED` and stamps `email_sent_at`.
-  * `save_processed_video(...)`: Archives the video, transcript, and generated summary with status (`COMPLETED`, `PENDING_EMAIL`, `NO_TRANSCRIPT`).
+  * `save_processed_video(...)`: Archives the video, transcript, and generated summary with status (`COMPLETED`, `PENDING_EMAIL`, `PENDING_SUMMARY`, `NO_TRANSCRIPT`).
 
 ---
 
@@ -108,7 +109,7 @@ The `TubeDigest` class encapsulates all interactions with external services:
 * **`get_latest_video()`**: Parses the YouTube RSS feed using `feedparser`. Detects feed/parsing failures via `feed.bozo` and `feed.bozo_exception`. Extracts the latest published video (`video_id`, `video_title`, `channel_title`, `author_info`). Returns `None` tuples upon failure without crashing.
 * **`get_video_details(video_id)`**: Resolves video title, author, and channel ID for an arbitrary YouTube video using standard oEmbed and watch page metadata extraction without requiring a YouTube Data API key.
 * **`get_transcript(video_id)`**: Extracts the text transcript using `youtube_transcript_api`. Catches exceptions (`TranscriptsDisabled`, `NoTranscriptFound`, network drops), logs the stack trace to the log file, and returns `None`.
-* **`summarize_transcript(video_title, transcript, prompt_template)`**: Injects `video_title` and `transcript` into the template loaded from SQLite. Submits request via `client.models.generate_content`. If an API or quota error occurs, records the traceback and returns `None` so the video is safely retried on subsequent runs.
+* **`summarize_transcript(video_title, transcript, prompt_template)`**: Injects `video_title` and `transcript` into the template loaded from SQLite. Submits request via `client.models.generate_content`. If an API or quota error occurs, records the traceback and returns `None`; the pipeline caches the downloaded transcript into SQLite under `PENDING_SUMMARY` so it is safely retried on subsequent runs without re-downloading subtitles from YouTube.
 * **`send_email(subject, markdown_content, video_url, video_id, email_template=None)`**: Converts Markdown content into HTML using `markdown`. Embeds the YouTube thumbnail (`https://img.youtube.com/vi/{video_id}/hqdefault.jpg`) into the prompt's customized HTML layout loaded from SQLite and transmits the email via authenticated STARTTLS SMTP. Returns `True` on success and `False` on failure, preventing incomplete states from being marked as completed.
 
 ---
@@ -121,7 +122,10 @@ The main entry point coordinates CLI management and pipeline execution:
 2. **Early State & Logging Setup**: Loads `config.toml` and initializes `StateManager` so all subsequent operations are traced.
 3. **Database Setup**: Connects to SQLite (`DatabaseManager`), handling channel and prompt migrations.
 4. **CLI Handler**: Processes `--add-channel`, `--disable-channel` (or `--deactivate-channel`), `--enable-channel` (or `--activate-channel`), `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, `--show-prompt`, `--video` (or `-v`), `--list-videos` (or `--list-summaries`), `--show-summary`, `--export-markdown` (or `--export-summary`), and `--show-transcript` arguments.
-5. **Automated Pipeline**: Iterates through active channels (or single target channel via `--channel` / `-c`, or target individual video via `--video`), automatically recovering any `PENDING_EMAIL` videos whose templates are now configured, detecting new uploads, transcribing subtitles, prompting Gemini, delivering HTML emails, and persisting state into SQLite archives.
+5. **Two-Tier Resilient Pipeline**: Iterates through active channels (or single target channel via `--channel` / `-c`, or target individual video via `--video`), executing a resilient two-tier recovery mechanism:
+   * **Tier 1 (AI Recovery - `PENDING_SUMMARY`)**: Re-attempts Gemini summarization using SQLite-cached transcripts, eliminating unnecessary YouTube subtitle downloads.
+   * **Tier 2 (Email Recovery - `PENDING_EMAIL`)**: Re-attempts SMTP delivery using SQLite-cached Markdown summaries, bypassing both YouTube downloads and Gemini API calls.
+   * **New Uploads**: Detects latest RSS uploads, downloads transcripts, generates summaries, dispatches HTML emails, and archives state in SQLite.
 
 ---
 
@@ -133,7 +137,7 @@ The `UI` class centralizes all visual styling and TUI formatting:
 * **Unicode Box-Drawing Tables**: Renders data tables with rounded corners (`╭─╮`, `╰─╯`, `│`, `├─┤`, `┼`) and aligned columns for channels, prompt templates, and video archives.
 * **Card Panels**: Renders bordered card containers with embedded titles (`draw_panel`) and automated text wrapping to fit within terminal width.
 * **Terminal Markdown Rendering Engine (`render_markdown`)**: Parses and renders Markdown syntax (headers, bold, italic, code, bullet/numbered lists with hanging indents, and wrapped Unicode comparison tables) into rich, beautifully formatted terminal output without third-party dependencies.
-* **Status Badges & Bullets**: Minimalist bullet indicators matching modern TUIs (`● Active`, `○ Disabled`, `● Yes`, `○ No`, `● COMPLETED`).
+* **Status Badges & Bullets**: Minimalist bullet indicators matching modern TUIs (`● Active`, `○ Disabled`, `● Yes`, `○ No`, `● COMPLETED`, `⏳ PENDING_AI`, `⏳ PEND_EMAIL`, `○ NO_SUBS`).
 * **ANSI Color Support & Safe Fallback**: Uses standard ANSI escape codes for colors, automatically disabling them when output is piped, redirected to a file, or when `NO_COLOR` is set.
 * **Clean Logging Integration**: Automatically strips all ANSI escape codes before writing output to `logs/tubedigest.log`.
 

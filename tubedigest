@@ -49,7 +49,7 @@ import re
 import shutil
 import signal
 import traceback
-from typing import Optional
+from typing import Optional, Set
 
 # Prevent BrokenPipeError when piping output to head or pager on POSIX systems
 if hasattr(signal, "SIGPIPE"):
@@ -582,6 +582,8 @@ def process_single_video(
 
   # Check if video was already recorded in SQLite
   existing_video = db.get_processed_video(video_id)
+  transcript = None
+
   if existing_video:
     v_status = existing_video.get("status")
     if v_status == "COMPLETED":
@@ -630,10 +632,22 @@ def process_single_video(
             f"{tag} Email dispatch failed; video remains in PENDING_EMAIL state."
         )
         return False
+    elif v_status == "PENDING_SUMMARY":
+      cached_transcript = existing_video.get("transcript") or ""
+      if cached_transcript:
+        state_manager.log_message(
+            f"{tag} Found video '{video_title}' ({UI.cyan(video_id)}) with cached transcript awaiting AI summary. Reusing cached transcript..."
+        )
+        transcript = cached_transcript
+      else:
+        state_manager.log_message(
+            f"{tag} Video '{video_title}' ({UI.cyan(video_id)}) marked as PENDING_SUMMARY but transcript is empty in DB. Re-downloading transcript..."
+        )
 
-  state_manager.log_message(f"{tag} Found new video: {UI.bold(video_title)} ({UI.cyan(video_id)})")
-  state_manager.log_message(f"{tag} Downloading transcript...")
-  transcript = digest.get_transcript(video_id)
+  if transcript is None:
+    state_manager.log_message(f"{tag} Found new video: {UI.bold(video_title)} ({UI.cyan(video_id)})")
+    state_manager.log_message(f"{tag} Downloading transcript...")
+    transcript = digest.get_transcript(video_id)
 
   if transcript:
     state_manager.log_message(f"{tag} Generating summary with Gemini (Prompt: {UI.magenta(prompt_id)})...")
@@ -643,8 +657,17 @@ def process_single_video(
     )
 
     if not sunto_markdown:
-      state_manager.log_message(
-          f"{tag} Summarization failed; skipping email dispatch and archive. Will retry on next run."
+      db.save_processed_video(
+          video_id=video_id,
+          channel_id=channel_id,
+          video_title=video_title,
+          video_url=video_url,
+          transcript=transcript,
+          summary_markdown="",
+          status="PENDING_SUMMARY",
+      )
+      state_manager.log_error(
+          f"{tag} Summarization failed; transcript cached as PENDING_SUMMARY in DB. Will retry on next run without re-downloading transcript."
       )
       return False
 
@@ -727,58 +750,84 @@ def recover_pending_channel_videos(
     db: DatabaseManager,
     digest: TubeDigest,
     state_manager: StateManager,
-) -> int:
-  """Recovers and dispatches any videos in PENDING_EMAIL state for the given channel."""
+) -> Set[str]:
+  """Recovers and dispatches any videos in PENDING_SUMMARY or PENDING_EMAIL state for the given channel.
+
+  Returns the set of video IDs that were handled during recovery.
+  """
   channel_id = channel["channel_id"]
   channel_label = channel.get("channel_name") or channel_id
   prompt_id = channel.get("prompt_id") or "default"
+  tag = UI.tag(channel_label)
 
-  pending_videos = db.get_pending_email_videos(channel_id)
-  if not pending_videos:
-    return 0
+  handled_video_ids: Set[str] = set()
 
-  email_template = db.get_email_template(prompt_id)
-  if not email_template or not email_template.strip():
-    state_manager.log_error(
-        f"[{channel_label}] Email template is still missing or blank for prompt '{prompt_id}'. Cannot recover {len(pending_videos)} pending video(s) yet."
+  # 1. Recover videos in PENDING_SUMMARY state (retry Gemini AI summary using cached transcript)
+  pending_summary_videos = db.get_pending_summary_videos(channel_id)
+  if pending_summary_videos:
+    state_manager.log_message(
+        f"{tag} Found {len(pending_summary_videos)} pending video(s) awaiting AI summary. Attempting recovery..."
     )
-    return 0
+    for psv in pending_summary_videos:
+      v_id = psv["video_id"]
+      v_title = psv.get("video_title") or f"Video ({v_id})"
+      v_url = psv.get("video_url") or f"https://www.youtube.com/watch?v={v_id}"
+      handled_video_ids.add(v_id)
+      process_single_video(
+          video_id=v_id,
+          video_title=v_title,
+          video_url=v_url,
+          channel=channel,
+          digest=digest,
+          db=db,
+          state_manager=state_manager,
+      )
 
-  recovered_count = 0
-  state_manager.log_message(
-      f"[{channel_label}] Found {len(pending_videos)} pending video(s) awaiting email dispatch. Attempting recovery..."
-  )
+  # 2. Recover videos in PENDING_EMAIL state (send email using cached summary, skipping AI and YouTube)
+  pending_email_videos = db.get_pending_email_videos(channel_id)
+  videos_to_email = [v for v in pending_email_videos if v["video_id"] not in handled_video_ids]
 
-  for pv in pending_videos:
-    v_id = pv["video_id"]
-    v_title = pv.get("video_title") or f"Video ({v_id})"
-    v_url = pv.get("video_url") or f"https://www.youtube.com/watch?v={v_id}"
-    sunto = pv.get("summary_markdown") or ""
-
-    if not sunto:
-      state_manager.log_error(f"[{channel_label}] Pending video '{v_title}' ({v_id}) has no summary stored; cannot recover.")
-      continue
-
-    state_manager.log_message(f"[{channel_label}] Sending email (recovery run for '{v_title}')...")
-    email_subject = f"{channel_label} - {v_title}"
-    email_sent = digest.send_email(
-        email_subject,
-        sunto,
-        v_url,
-        v_id,
-        email_template=email_template,
-        channel_label=channel_label,
-    )
-    tag = UI.tag(channel_label)
-    if email_sent:
-      db.mark_video_completed(v_id)
-      recovered_count += 1
-      state_manager.log_message(f"{tag} {UI.success(f'Video \'{v_title}\' ({UI.cyan(v_id)}) successfully recovered and marked as COMPLETED!')}")
-      state_manager.log_message(UI.gray("─" * 60))
+  if videos_to_email:
+    email_template = db.get_email_template(prompt_id)
+    if not email_template or not email_template.strip():
+      state_manager.log_error(
+          f"{tag} Email template is still missing or blank for prompt '{prompt_id}'. Cannot recover {len(videos_to_email)} pending email video(s) yet."
+      )
     else:
-      state_manager.log_message(f"{tag} Recovery dispatch failed for video '{v_title}' ({v_id}).")
+      state_manager.log_message(
+          f"{tag} Found {len(videos_to_email)} pending video(s) awaiting email dispatch. Attempting recovery..."
+      )
+      for pv in videos_to_email:
+        v_id = pv["video_id"]
+        v_title = pv.get("video_title") or f"Video ({v_id})"
+        v_url = pv.get("video_url") or f"https://www.youtube.com/watch?v={v_id}"
+        sunto = pv.get("summary_markdown") or ""
+        handled_video_ids.add(v_id)
 
-  return recovered_count
+        if not sunto:
+          state_manager.log_error(f"{tag} Pending video '{v_title}' ({v_id}) has no summary stored; cannot recover.")
+          continue
+
+        state_manager.log_message(f"{tag} Sending email (recovery run for '{v_title}')...")
+        email_subject = f"{channel_label} - {v_title}"
+        email_sent = digest.send_email(
+            email_subject,
+            sunto,
+            v_url,
+            v_id,
+            email_template=email_template,
+            channel_label=channel_label,
+        )
+        if email_sent:
+          db.mark_video_completed(v_id)
+          state_manager.log_message(
+              f"{tag} {UI.success(f'Video \'{v_title}\' ({UI.cyan(v_id)}) successfully recovered and marked as COMPLETED!')}"
+          )
+          state_manager.log_message(UI.gray("─" * 60))
+        else:
+          state_manager.log_message(f"{tag} Recovery dispatch failed for video '{v_title}' ({v_id}).")
+
+  return handled_video_ids
 
 
 def run_pipeline(
@@ -816,8 +865,8 @@ def run_pipeline(
     channel_id = channel["channel_id"]
     channel_label = channel.get("channel_name") or channel_id
 
-    # 1. Recover any pending videos awaiting email dispatch
-    recover_pending_channel_videos(channel, db, digest, state_manager)
+    # 1. Recover any pending videos awaiting AI summary or email dispatch
+    handled_ids = recover_pending_channel_videos(channel, db, digest, state_manager)
 
     tag = UI.tag(channel_label)
     # 2. Check for latest video via RSS
@@ -826,6 +875,12 @@ def run_pipeline(
 
     if not video_id:
       state_manager.log_message(f"{tag} No new video found to process.")
+      continue
+
+    if video_id in handled_ids:
+      state_manager.log_message(
+          f"{tag} Latest video '{video_title}' ({UI.cyan(video_id)}) was already handled during recovery in this run."
+      )
       continue
 
     process_single_video(
