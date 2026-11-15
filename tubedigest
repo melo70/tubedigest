@@ -14,7 +14,7 @@ Usage:
       ./tubedigest --channel <CHANNEL_ID_OR_NAME>
 
     - Process a specific YouTube video (by ID or full URL):
-      ./tubedigest --video <VIDEO_ID_OR_URL>
+      ./tubedigest --add-video <VIDEO_ID_OR_URL>
 
     - Channel management via CLI:
       ./tubedigest --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
@@ -147,7 +147,7 @@ def handle_cli_channels(
   if args.list_prompts:
     prompts = db.list_prompts()
     if not prompts:
-      state_manager.log_message(UI.warning("No prompts found in database."))
+      state_manager.print_screen(UI.warning("No prompts found in database."))
       return True
 
     headers = ["Default", "Prompt ID", "Title", "Updated At"]
@@ -166,14 +166,14 @@ def handle_cli_channels(
         f"  {UI.bold('Total:')} {len(prompts)} prompt template(s)\n",
         UI.tip("View full prompt text: ./tubedigest --show-prompt <PROMPT_ID>\n"),
     ]
-    state_manager.log_message("\n".join(footer))
+    state_manager.print_screen("\n".join(footer))
     return True
 
   if args.show_prompt:
     prompt = db.get_prompt_details(args.show_prompt)
     if not prompt:
       state_manager.log_error(f"Prompt '{args.show_prompt}' not found in database.")
-      state_manager.log_message(UI.tip("List available prompts: ./tubedigest --list-prompts"))
+      state_manager.print_screen(UI.tip("List available prompts: ./tubedigest --list-prompts"))
       return True
 
     meta = "\n".join([
@@ -185,7 +185,7 @@ def handle_cli_channels(
     panel_meta = UI.draw_panel(f"Prompt Template: {prompt['prompt_id']}", meta)
     panel_prompt = UI.draw_panel("AI Summary Prompt Template", prompt["prompt_text"])
     panel_email = UI.draw_panel("Email HTML Layout Template", prompt.get("email_template") or "(Using default system HTML layout)")
-    state_manager.log_message("\n" + panel_meta + "\n\n" + panel_prompt + "\n\n" + panel_email + "\n")
+    state_manager.print_screen("\n" + panel_meta + "\n\n" + panel_prompt + "\n\n" + panel_email + "\n")
     return True
 
   if args.add_channel:
@@ -277,8 +277,8 @@ def handle_cli_channels(
   if args.list_channels:
     channels = db.list_channels()
     if not channels:
-      state_manager.log_message(UI.warning("No channels found in database."))
-      state_manager.log_message(UI.tip("Add a channel: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]"))
+      state_manager.print_screen(UI.warning("No channels found in database."))
+      state_manager.print_screen(UI.tip("Add a channel: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]"))
       return True
 
     headers = ["Status", "Channel ID", "Channel Name", "Author / Creator", "Prompt ID"]
@@ -298,14 +298,15 @@ def handle_cli_channels(
         f"  {UI.bold('Total:')} {len(channels)} channel(s)\n",
         UI.tip("Add channel: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]\n"),
     ]
-    state_manager.log_message("\n".join(footer))
+    state_manager.print_screen("\n".join(footer))
     return True
 
-  if args.video:
-    video_id = extract_video_id(args.video)
+  target_video = getattr(args, "add_video", None) or getattr(args, "video", None)
+  if target_video:
+    video_id = extract_video_id(target_video)
     if not video_id:
       state_manager.log_error(
-          f"Invalid YouTube video identifier '{args.video}'. Please provide an 11-character Video ID or a valid YouTube URL."
+          f"Invalid YouTube video identifier '{target_video}'. Please provide an 11-character Video ID or a valid YouTube URL."
       )
       return True
 
@@ -329,7 +330,7 @@ def handle_cli_channels(
       state_manager.log_error(
           f"Video '{v_title}' ({video_id}) belongs to {author_desc}, which is not present in your tracked channels list."
       )
-      state_manager.log_message("Add this channel first using: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]")
+      state_manager.print_screen(UI.tip(f"Add this channel first using: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]"))
       return True
 
     ch_label = channel.get("channel_name") or channel["channel_id"]
@@ -360,8 +361,8 @@ def handle_cli_channels(
   if args.list_videos:
     videos = db.list_processed_videos()
     if not videos:
-      state_manager.log_message(UI.warning("No processed videos found in database."))
-      state_manager.log_message(UI.tip("Videos are archived during runs or with: ./tubedigest --video <URL>"))
+      state_manager.print_screen(UI.warning("No processed videos found in database."))
+      state_manager.print_screen(UI.tip("Videos are archived during runs or with: ./tubedigest --add-video <URL>"))
       return True
 
     headers = ["Video ID", "Duration", "Status", "Summary", "Channel", "Processed At", "Video Title"]
@@ -386,7 +387,7 @@ def handle_cli_channels(
         UI.tip("Export markdown: ./tubedigest --export-markdown <VIDEO_ID> [--output <PATH>]"),
         UI.tip("Delete video:    ./tubedigest --delete-video <VIDEO_ID>\n"),
     ]
-    state_manager.log_message("\n".join(footer))
+    state_manager.print_screen("\n".join(footer))
     return True
 
   if args.show_summary:
@@ -400,7 +401,7 @@ def handle_cli_channels(
     v = db.get_processed_video(video_id)
     if not v:
       state_manager.log_error(f"Video '{video_id}' not found in processed videos archive.")
-      state_manager.log_message(UI.tip("List available videos: ./tubedigest --list-videos"))
+      state_manager.print_screen(UI.tip("List available videos: ./tubedigest --list-videos"))
       return True
 
     summary = v.get("summary_markdown")
@@ -442,7 +443,7 @@ def handle_cli_channels(
         divider,
         UI.tip(f"Export this markdown: ./tubedigest --export-markdown {video_id} [--output <PATH>]\n"),
     ]
-    state_manager.log_message("\n".join(output_block))
+    state_manager.print_screen("\n".join(output_block))
     return True
 
   if args.export_markdown:
@@ -529,7 +530,7 @@ def handle_cli_channels(
     v = db.get_processed_video(video_id)
     if not v:
       state_manager.log_error(f"Video '{video_id}' not found in processed videos archive.")
-      state_manager.log_message(UI.tip("List available videos: ./tubedigest --list-videos"))
+      state_manager.print_screen(UI.tip("List available videos: ./tubedigest --list-videos"))
       return True
 
     transcript = v.get("transcript")
@@ -549,7 +550,7 @@ def handle_cli_channels(
     ])
     panel_meta = UI.draw_panel("Video Metadata", meta)
     panel_text = UI.draw_panel("Raw Transcript Text", transcript.strip())
-    state_manager.log_message("\n" + panel_meta + "\n\n" + panel_text + "\n")
+    state_manager.print_screen("\n" + panel_meta + "\n\n" + panel_text + "\n")
     return True
 
   if args.delete_video:
@@ -563,14 +564,14 @@ def handle_cli_channels(
     deleted_info = db.remove_processed_video(video_id)
     if not deleted_info:
       state_manager.log_error(f"Video '{video_id}' not found in processed videos archive.")
-      state_manager.log_message(UI.tip("List available videos: ./tubedigest --list-videos"))
+      state_manager.print_screen(UI.tip("List available videos: ./tubedigest --list-videos"))
       return True
 
     title = deleted_info.get("video_title") or f"Video ({video_id})"
     state_manager.log_message(
         UI.success(f"Video '{UI.bold(title)}' ({UI.cyan(video_id)}) was successfully removed from SQLite database.")
     )
-    state_manager.log_message(UI.tip(f"To re-process this video now, run: ./tubedigest --video {video_id}\n"))
+    state_manager.print_screen(UI.tip(f"To re-process this video now, run: ./tubedigest --add-video {video_id}\n"))
     return True
 
   return False
@@ -973,9 +974,10 @@ def main():
       help="Run one-shot pipeline check only for the specified channel (by ID or Name) in SQLite.",
   )
   parser.add_argument(
+      "--add-video",
       "--video",
       "-v",
-      dest="video",
+      dest="add_video",
       metavar="VIDEO",
       help="Process a specific YouTube video (by ID or full URL). Verifies channel ownership against SQLite before processing.",
   )

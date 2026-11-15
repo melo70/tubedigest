@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 from typing import List, Optional, Dict, Any, Union
 
@@ -71,12 +72,60 @@ class DatabaseManager:
           ),
       )
 
-      # Ensure existing default prompt has email_template populated if empty
+      # Ensure existing default prompt has latest email_template
       if default_email_html:
         conn.execute(
-            """UPDATE prompts SET email_template = ? WHERE prompt_id = ? AND (email_template IS NULL OR email_template = '')""",
+            """UPDATE prompts SET email_template = ? WHERE prompt_id = ?""",
             (default_email_html, DatabaseQueries.DEFAULT_PROMPT_ID),
         )
+
+      # Migration safeguard: ensure all prompt email templates use justified paragraph styling
+      p_cur = conn.execute("SELECT prompt_id, email_template FROM prompts WHERE email_template IS NOT NULL")
+      for p_row in p_cur.fetchall():
+        pid = p_row["prompt_id"]
+        tmpl = p_row["email_template"]
+        if tmpl and "text-align: justify" not in tmpl:
+          new_tmpl = tmpl
+          if re.search(r"p\s*\{\{", new_tmpl):
+            new_tmpl = re.sub(
+                r"(p\s*\{\{)",
+                r"\1\n        text-align: justify;\n        text-justify: inter-word;\n        -webkit-hyphens: auto;\n        -ms-hyphens: auto;\n        hyphens: auto;",
+                new_tmpl,
+                count=1,
+            )
+          elif re.search(r"p\s*\{", new_tmpl):
+            new_tmpl = re.sub(
+                r"(p\s*\{)",
+                r"\1 text-align: justify; text-justify: inter-word; -webkit-hyphens: auto; -ms-hyphens: auto; hyphens: auto;",
+                new_tmpl,
+                count=1,
+            )
+          else:
+            if "</style>" in new_tmpl:
+              if "{{" in new_tmpl:
+                rule = "      p {{\n        text-align: justify;\n        text-justify: inter-word;\n        -webkit-hyphens: auto;\n        -ms-hyphens: auto;\n        hyphens: auto;\n        margin-top: 0;\n        margin-bottom: 14px;\n      }}\n    "
+              else:
+                rule = "      p { text-align: justify; text-justify: inter-word; -webkit-hyphens: auto; -ms-hyphens: auto; hyphens: auto; margin-top: 0; margin-bottom: 14px; }\n    "
+              new_tmpl = new_tmpl.replace("</style>", rule + "</style>")
+
+          if "blockquote" in new_tmpl and "text-align: justify" not in new_tmpl:
+            if re.search(r"blockquote\s*\{\{", new_tmpl):
+              new_tmpl = re.sub(
+                  r"(blockquote\s*\{\{)",
+                  r"\1\n        text-align: justify;\n        text-justify: inter-word;",
+                  new_tmpl,
+                  count=1,
+              )
+            elif re.search(r"blockquote\s*\{", new_tmpl):
+              new_tmpl = re.sub(
+                  r"(blockquote\s*\{)",
+                  r"\1 text-align: justify; text-justify: inter-word;",
+                  new_tmpl,
+                  count=1,
+              )
+
+          if new_tmpl != tmpl:
+            conn.execute("UPDATE prompts SET email_template = ? WHERE prompt_id = ?", (new_tmpl, pid))
 
       # Backfill any existing channel missing author metadata
       conn.execute("""

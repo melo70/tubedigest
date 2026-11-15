@@ -98,7 +98,8 @@ Database logic is split between domain data types, a dedicated SQL query reposit
 The `StateManager` class handles application execution logging with automatic rotation, level-based formatting, and ASCII art banner headers:
 
 * **Initialization (`__init__`)**: Reads storage configuration, configures `BannerRotatingFileHandler` with configurable `max_bytes` and `backup_count`, and ensures new log files start with an ASCII art header banner.
-* **`log_message(message)`**: Prints informational message to stdout and appends it to the rotated log file (e.g., `logs/tubedigest.log`) formatted as `[timestamp] [INFO] message`.
+* **`log_message(message, to_file=True)`**: Prints informational message to stdout and appends it to the rotated log file (e.g., `logs/tubedigest.log`) formatted as `[timestamp] [INFO] message`.
+* **`print_screen(message)`**: Prints output directly to stdout without appending to the rotated log file, used for read-only CLI display commands (`--list-channels`, `--list-prompts`, `--show-prompt`, `--list-videos`, `--show-summary`, `--show-transcript`) to prevent log file clutter.
 * **`log_error(message, exc=None)`**: Prints a user-friendly warning (`⚠ message`) to `stderr` and records technical error details and full stack trace (`exc_info=exc`) to the log file formatted as `[timestamp] [ERROR] message - Exception: ...`.
 
 ---
@@ -125,8 +126,8 @@ The main entry point coordinates CLI management and pipeline execution:
 1. **Global Exception Interception (`sys.excepthook`)**: Captures unhandled crashes globally. Prevents terminal clutter by displaying polite error summaries on screen while logging complete diagnostic tracebacks as `[CRITICAL]` in `logs/tubedigest.log`.
 2. **Early State & Logging Setup**: Loads `config.toml` and initializes `StateManager` so all subsequent operations are traced.
 3. **Database Setup**: Connects to SQLite (`DatabaseManager`), handling channel and prompt migrations.
-4. **CLI Handler**: Processes `--add-channel`, `--disable-channel` (or `--deactivate-channel`), `--enable-channel` (or `--activate-channel`), `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, `--show-prompt`, `--video` (or `-v`), `--list-videos` (or `--list-summaries`), `--show-summary`, `--export-markdown` (or `--export-summary`), `--show-transcript`, and `--delete-video` (or `--remove-video`) arguments.
-5. **Two-Tier Resilient Pipeline**: Iterates through active channels (or single target channel via `--channel` / `-c`, or target individual video via `--video`), executing a resilient two-tier recovery mechanism:
+4. **CLI Handler**: Processes `--add-channel`, `--disable-channel` (or `--deactivate-channel`), `--enable-channel` (or `--activate-channel`), `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, `--show-prompt`, `--add-video` (or `--video`, `-v`), `--list-videos` (or `--list-summaries`), `--show-summary`, `--export-markdown` (or `--export-summary`), `--show-transcript`, and `--delete-video` (or `--remove-video`) arguments.
+5. **Two-Tier Resilient Pipeline**: Iterates through active channels (or single target channel via `--channel` / `-c`, or target individual video via `--add-video`), executing a resilient two-tier recovery mechanism:
    * **Tier 1 (AI Recovery - `PENDING_SUMMARY`)**: Re-attempts Gemini summarization using SQLite-cached transcripts, eliminating unnecessary YouTube subtitle downloads.
    * **Tier 2 (Email Recovery - `PENDING_EMAIL`)**: Re-attempts SMTP delivery using SQLite-cached Markdown summaries, bypassing both YouTube downloads and Gemini API calls.
    * **New Uploads**: Detects latest RSS uploads, downloads transcripts, generates summaries, dispatches HTML emails, and archives state in SQLite.
@@ -140,7 +141,8 @@ The `UI` class centralizes all visual styling and TUI formatting:
 * **Retro-Futuristic ASCII Art Header**: Stylized raster block banner for `TUBEDIGEST` with a smooth horizontal 3-stop RGB gradient (Cyan -> Magenta -> Coral) and prompt indicator (`>`).
 * **Unicode Box-Drawing Tables**: Renders data tables with rounded corners (`╭─╮`, `╰─╯`, `│`, `├─┤`, `┼`) and aligned columns for channels, prompt templates, and video archives.
 * **Card Panels**: Renders bordered card containers with embedded titles (`draw_panel`) and automated text wrapping to fit within terminal width.
-* **Terminal Markdown Rendering Engine (`render_markdown`)**: Parses and renders Markdown syntax (headers, bold, italic, code, bullet/numbered lists with hanging indents, and wrapped Unicode comparison tables) into rich, beautifully formatted terminal output without third-party dependencies.
+* **Terminal Markdown Rendering Engine (`render_markdown`)**: Parses and renders Markdown syntax (headers, bold, italic, code, bullet/numbered lists with hanging indents, and wrapped Unicode comparison tables) into rich, beautifully formatted terminal output without third-party dependencies. Features ANSI-aware full text justification (`wrap_text`, `justify_line`) that aligns paragraphs and multi-line bullet lists flush with both margins while preserving left-aligned concluding lines.
+* **Justified Email Typography**: Formats email HTML bodies with editorial full justification (`text-align: justify; text-justify: inter-word; hyphens: auto;`) across all prompt templates while keeping headings, lists, and tables cleanly left-aligned.
 * **Status Badges & Bullets**: Minimalist bullet indicators matching modern TUIs (`● Active`, `○ Disabled`, `● Yes`, `○ No`, `● COMPLETED`, `⏳ PENDING_AI`, `⏳ PEND_EMAIL`, `○ NO_SUBS`).
 * **ANSI Color Support & Safe Fallback**: Uses standard ANSI escape codes for colors, automatically disabling them when output is piped, redirected to a file, or when `NO_COLOR` is set.
 * **Clean Logging Integration**: Automatically strips all ANSI escape codes before writing output to `logs/tubedigest.log`.

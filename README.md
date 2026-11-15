@@ -187,9 +187,9 @@ Re-enable a previously deactivated channel for automated checks:
 ### Process a Specific Video (One-Shot by URL or Video ID)
 Process an individual YouTube video on demand, verifying that it belongs to one of your tracked creators before transcribing, summarizing, emailing, and archiving:
 ```bash
-./tubedigest --video <VIDEO_ID_OR_URL>
-# or using shortcut:
-./tubedigest -v "https://www.youtube.com/watch?v=rwFrygFbA-U"
+./tubedigest --add-video <VIDEO_ID_OR_URL>
+# or using shortcuts/aliases:
+./tubedigest --video "https://www.youtube.com/watch?v=rwFrygFbA-U"
 ./tubedigest -v "rwFrygFbA-U"
 ```
 *(Accepts raw 11-character video IDs or full YouTube URLs including Shorts and shortlinks. TubeDigest verifies ownership against your tracked authors in SQLite; if the channel is not yet registered, it prompts you to add it first).*

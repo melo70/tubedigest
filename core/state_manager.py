@@ -88,11 +88,16 @@ class StateManager:
     with open(self.log_path, "w", encoding="utf-8") as f:
       f.write(header)
 
-  def log_message(self, message: str):
-    """Writes an informational message to stdout and appends it to the rotated log file."""
+  def log_message(self, message: str, to_file: bool = True):
+    """Writes an informational message to stdout and optionally appends it to the rotated log file."""
     print(message)
-    clean_message = strip_ansi(message)
-    self.logger.info(clean_message)
+    if to_file:
+      clean_message = strip_ansi(message)
+      self.logger.info(clean_message)
+
+  def print_screen(self, message: str):
+    """Prints a message directly to stdout without writing to the rotated log file."""
+    print(message)
 
   def log_error(self, message: str, exc: Optional[BaseException] = None):
     """Prints a friendly error message to stderr and logs technical details with traceback to file."""

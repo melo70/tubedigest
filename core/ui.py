@@ -484,7 +484,68 @@ class UI:
     return "\n".join(lines)
 
   @classmethod
-  def render_markdown(cls, md_text: str, width: Optional[int] = None) -> str:
+  def justify_line(cls, line: str, width: int, rtl: bool = False) -> str:
+    """Justifies a single line of terminal text to target width by distributing spaces."""
+    stripped = line.strip()
+    words = stripped.split()
+    if len(words) <= 1:
+      return line
+    vis_len = sum(visible_len(w) for w in words)
+    spaces_needed = width - vis_len
+    gaps = len(words) - 1
+    if gaps <= 0 or spaces_needed < gaps or spaces_needed > gaps * 3.5:
+      return line
+    base = spaces_needed // gaps
+    extra = spaces_needed % gaps
+    parts = []
+    for idx, w in enumerate(words):
+      parts.append(w)
+      if idx < gaps:
+        has_extra = 1 if (idx >= (gaps - extra) if rtl else idx < extra) else 0
+        parts.append(" " * (base + has_extra))
+    return "".join(parts)
+
+  @classmethod
+  def wrap_text(cls, text: str, width: int, justify: bool = True) -> List[str]:
+    """Wraps text respecting ANSI codes, optionally justifying lines."""
+    if not text:
+      return []
+    words = text.split(" ")
+    lines = []
+    current_line = []
+    current_vis_len = 0
+    for w in words:
+      if not w:
+        continue
+      w_len = visible_len(w)
+      if current_line and (current_vis_len + 1 + w_len > width):
+        lines.append(" ".join(current_line))
+        current_line = [w]
+        current_vis_len = w_len
+      else:
+        if current_line:
+          current_vis_len += 1 + w_len
+        else:
+          current_vis_len = w_len
+        current_line.append(w)
+    if current_line:
+      lines.append(" ".join(current_line))
+
+    if not justify or len(lines) <= 1:
+      return lines
+
+    justified = []
+    for idx, l in enumerate(lines):
+      if idx == len(lines) - 1:
+        justified.append(l)
+      else:
+        justified.append(cls.justify_line(l, width, rtl=(idx % 2 == 1)))
+    return justified
+
+  @classmethod
+  def render_markdown(
+      cls, md_text: str, width: Optional[int] = None, justify: bool = True
+  ) -> str:
     """Renders a Markdown document into beautiful, colorized terminal text."""
     if not md_text:
       return ""
@@ -578,11 +639,16 @@ class UI:
 
       # 6. Blockquote (> Quote)
       if stripped.startswith(">"):
-        q_text = cls.render_inline(stripped.lstrip("> ").strip())
-        wrapped_q = textwrap.wrap(q_text, width=target_width - 6)
+        quote_lines = [stripped.lstrip("> ").strip()]
+        i += 1
+        while i < n and lines[i].strip().startswith(">"):
+          quote_lines.append(lines[i].strip().lstrip("> ").strip())
+          i += 1
+        full_q = " ".join(quote_lines)
+        rendered_q = cls.render_inline(full_q)
+        wrapped_q = cls.wrap_text(rendered_q, width=target_width - 6, justify=justify)
         for ql in wrapped_q:
           out.append(f"  {cls.gray('│')} {cls.dim(ql)}")
-        i += 1
         continue
 
       # 7. Unordered List (- , * , + )
@@ -593,7 +659,8 @@ class UI:
         item_text = cls.render_inline(m_list.group(3))
         prefix_len = 2 + indent_spaces + 2
         sub_indent = " " * prefix_len
-        wrapped = textwrap.wrap(item_text, width=target_width - prefix_len)
+        avail_width = target_width - prefix_len
+        wrapped = cls.wrap_text(item_text, width=avail_width, justify=justify)
         if wrapped:
           out.append(" " * indent_spaces + f"  {bullet_char} " + wrapped[0])
           for extra_l in wrapped[1:]:
@@ -612,7 +679,8 @@ class UI:
         prefix = " " * indent_spaces + f"  {cls.bold(num_str + '.')} "
         prefix_len = 2 + indent_spaces + len(num_str) + 2
         sub_indent = " " * prefix_len
-        wrapped = textwrap.wrap(item_text, width=target_width - prefix_len)
+        avail_width = target_width - prefix_len
+        wrapped = cls.wrap_text(item_text, width=avail_width, justify=justify)
         if wrapped:
           out.append(prefix + wrapped[0])
           for extra_l in wrapped[1:]:
@@ -623,10 +691,29 @@ class UI:
         continue
 
       # 9. Standard Paragraph
-      rendered_p = cls.render_inline(stripped)
-      wrapped_p = textwrap.wrap(rendered_p, width=target_width)
+      p_lines = [stripped]
+      i += 1
+      while i < n:
+        next_line = lines[i]
+        next_stripped = next_line.strip()
+        if (
+            not next_stripped
+            or next_stripped.startswith("```")
+            or next_stripped.startswith("|")
+            or next_stripped.startswith("#")
+            or next_stripped in ("---", "***", "___", "- - -", "* * *")
+            or next_stripped.startswith(">")
+            or re.match(r"^(\s*)([-*+])\s+", next_line)
+            or re.match(r"^(\s*)(\d+)\.\s+", next_line)
+        ):
+          break
+        p_lines.append(next_stripped)
+        i += 1
+
+      full_p = " ".join(p_lines)
+      rendered_p = cls.render_inline(full_p)
+      wrapped_p = cls.wrap_text(rendered_p, width=target_width, justify=justify)
       for pl in wrapped_p:
         out.append(pl)
-      i += 1
 
     return "\n".join(out)
