@@ -259,7 +259,7 @@ class DatabaseQueries:
     FROM processed_videos v
     LEFT JOIN channels c ON v.channel_id = c.channel_id
     LEFT JOIN channel_authors a ON v.channel_id = a.channel_id
-    ORDER BY v.created_at DESC
+    ORDER BY v.created_at
   """
 
   GET_PENDING_EMAIL_VIDEOS = """
