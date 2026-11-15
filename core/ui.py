@@ -207,6 +207,18 @@ class UI:
     return f"{cls.magenta(st[:12])}"
 
   @classmethod
+  def format_duration(cls, seconds: Optional[int]) -> str:
+    """Formats duration in seconds to standard timestamp string (e.g. '15:33' or '1:12:45')."""
+    if not isinstance(seconds, int) or seconds <= 0:
+      return "-"
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    if hours > 0:
+      return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+  @classmethod
   def tag(cls, channel_label: str) -> str:
     """Formats channel tag prefix for terminal pipeline logs: [channel_name]."""
     return f"{cls.gray('[')}{cls.bold(cls.cyan(channel_label))}{cls.gray(']')}"

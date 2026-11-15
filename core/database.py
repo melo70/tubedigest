@@ -51,6 +51,12 @@ class DatabaseManager:
       if p_columns and "email_template" not in p_columns:
         conn.execute("ALTER TABLE prompts ADD COLUMN email_template TEXT")
 
+      # Migration safeguard: if processed_videos is missing duration_seconds column, migrate it
+      v_cursor = conn.execute("PRAGMA table_info(processed_videos)")
+      v_columns = [row["name"] for row in v_cursor.fetchall()]
+      if v_columns and "duration_seconds" not in v_columns:
+        conn.execute("ALTER TABLE processed_videos ADD COLUMN duration_seconds INTEGER")
+
       # Seed default prompt and email layout from external template files
       default_prompt_text = self.load_template_file("default_prompt.txt")
       default_email_html = self.load_template_file("default_email.html")
@@ -415,6 +421,7 @@ class DatabaseManager:
       transcript: Optional[str] = None,
       summary_markdown: Optional[str] = None,
       status: Union[VideoStatus, str] = VideoStatus.COMPLETED,
+      duration_seconds: Optional[int] = None,
   ):
     """Archives or updates a processed video, transcript, and summary in SQLite."""
     status_str = str(status)
@@ -426,6 +433,7 @@ class DatabaseManager:
               channel_id,
               video_title,
               video_url,
+              duration_seconds,
               transcript,
               summary_markdown,
               status_str,

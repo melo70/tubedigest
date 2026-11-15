@@ -14,6 +14,19 @@ from google import genai
 from core.ui import UI
 
 
+def parse_iso8601_duration(duration_str: str) -> Optional[int]:
+  """Parses ISO 8601 duration format (e.g. PT1H23M45S, PT15M33S, PT45S) into total seconds."""
+  if not duration_str:
+    return None
+  match = re.match(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$", duration_str.strip())
+  if not match:
+    return None
+  hours = int(match.group(1) or 0)
+  minutes = int(match.group(2) or 0)
+  seconds = int(match.group(3) or 0)
+  return hours * 3600 + minutes * 60 + seconds
+
+
 class TubeDigest:
 
   def __init__(self, config: Dict[str, Any], state_manager=None):
@@ -38,6 +51,7 @@ class TubeDigest:
     self.smtp_port = email_cfg.get("smtp_port", 587)
 
     self.client = genai.Client(api_key=self.gemini_api_key)
+    self._last_transcript_duration: Optional[int] = None
 
   def _report_error(self, message: str, exc: Optional[BaseException] = None):
     """Dispatches human-friendly message to stderr and full exception/traceback to the log file."""
@@ -110,13 +124,14 @@ class TubeDigest:
     except Exception as e:
       self._report_error(f"oEmbed metadata lookup failed for video '{video_id}'.", exc=e)
 
-    # 2. If channel_id is not yet resolved, inspect watch page HTML headers
-    if not channel_id:
-      try:
-        req = urllib.request.Request(video_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-          html_chunk = resp.read(262144).decode("utf-8", errors="replace")
+    # 2. Inspect watch page HTML for channel_id, title, author, and duration
+    duration_seconds = None
+    try:
+      req = urllib.request.Request(video_url, headers=headers)
+      with urllib.request.urlopen(req, timeout=10) as resp:
+        html_chunk = resp.read(524288).decode("utf-8", errors="replace")
 
+        if not channel_id:
           ch_match = re.search(r'itemprop=["\']channelId["\']\s+content=["\']([^"\']+)["\']', html_chunk)
           if not ch_match:
             ch_match = re.search(r'content=["\']([^"\']+)["\']\s+itemprop=["\']channelId["\']', html_chunk)
@@ -125,17 +140,33 @@ class TubeDigest:
           if ch_match:
             channel_id = ch_match.group(1)
 
-          if not title:
-            t_match = re.search(r'<meta\s+property=["\']og:title["\']\s+content=["\']([^"\']+)["\']', html_chunk)
-            if t_match:
-              title = t_match.group(1)
+        if not title:
+          t_match = re.search(r'<meta\s+property=["\']og:title["\']\s+content=["\']([^"\']+)["\']', html_chunk)
+          if t_match:
+            title = t_match.group(1)
 
-          if not author_name:
-            a_match = re.search(r'<link\s+itemprop=["\']name["\']\s+content=["\']([^"\']+)["\']', html_chunk)
-            if a_match:
-              author_name = a_match.group(1)
-      except Exception as e:
-        self._report_error(f"Watch page lookup failed for video '{video_id}'.", exc=e)
+        if not author_name:
+          a_match = re.search(r'<link\s+itemprop=["\']name["\']\s+content=["\']([^"\']+)["\']', html_chunk)
+          if a_match:
+            author_name = a_match.group(1)
+
+        m_len = re.search(r'["\']lengthSeconds["\']\s*:\s*["\']?(\d+)["\']?', html_chunk)
+        if m_len:
+          duration_seconds = int(m_len.group(1))
+        else:
+          m_ms = re.search(r'["\']approxDurationMs["\']\s*:\s*["\']?(\d+)["\']?', html_chunk)
+          if m_ms:
+            duration_seconds = int(m_ms.group(1)) // 1000
+          else:
+            m_iso = re.search(r'itemprop=["\']duration["\']\s+content=["\']([^"\']+)["\']', html_chunk)
+            if not m_iso:
+              m_iso = re.search(r'content=["\']([^"\']+)["\']\s+itemprop=["\']duration["\']', html_chunk)
+            if not m_iso:
+              m_iso = re.search(r'["\']duration["\']\s*:\s*["\'](PT[^"\']+)["\']', html_chunk)
+            if m_iso:
+              duration_seconds = parse_iso8601_duration(m_iso.group(1))
+    except Exception as e:
+      self._report_error(f"Watch page lookup failed for video '{video_id}'.", exc=e)
 
     if not title:
       title = f"YouTube Video ({video_id})"
@@ -147,7 +178,50 @@ class TubeDigest:
         "channel_id": channel_id,
         "author_name": author_name,
         "author_url": author_url or (f"https://www.youtube.com/channel/{channel_id}" if channel_id else None),
+        "duration_seconds": duration_seconds,
     }
+
+  def get_video_duration(self, video_id: str) -> Optional[int]:
+    """Retrieves video duration in seconds via watch page player response, meta tags, or transcript timestamps."""
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9,it;q=0.8",
+    }
+    try:
+      req = urllib.request.Request(video_url, headers=headers)
+      with urllib.request.urlopen(req, timeout=10) as resp:
+        html_chunk = resp.read(524288).decode("utf-8", errors="replace")
+
+        m_len = re.search(r'["\']lengthSeconds["\']\s*:\s*["\']?(\d+)["\']?', html_chunk)
+        if m_len:
+          return int(m_len.group(1))
+
+        m_ms = re.search(r'["\']approxDurationMs["\']\s*:\s*["\']?(\d+)["\']?', html_chunk)
+        if m_ms:
+          return int(m_ms.group(1)) // 1000
+
+        m_iso = re.search(r'itemprop=["\']duration["\']\s+content=["\']([^"\']+)["\']', html_chunk)
+        if not m_iso:
+          m_iso = re.search(r'content=["\']([^"\']+)["\']\s+itemprop=["\']duration["\']', html_chunk)
+        if not m_iso:
+          m_iso = re.search(r'["\']duration["\']\s*:\s*["\'](PT[^"\']+)["\']', html_chunk)
+        if m_iso:
+          parsed = parse_iso8601_duration(m_iso.group(1))
+          if parsed:
+            return parsed
+    except Exception as e:
+      self._report_error(f"Duration lookup from watch page failed for video '{video_id}'.", exc=e)
+
+    # Fallback to transcript duration if available
+    if self._last_transcript_duration:
+      return self._last_transcript_duration
+
+    return None
 
   def get_latest_video(
       self, channel_id: Optional[str] = None
@@ -200,6 +274,14 @@ class TubeDigest:
 
       # Extract text by reading the .text attribute of each snippet
       full_text = " ".join([snippet.text for snippet in fetched_data])
+      if fetched_data:
+        try:
+          last = fetched_data[-1]
+          start = getattr(last, "start", 0) if hasattr(last, "start") else last.get("start", 0)
+          dur = getattr(last, "duration", 0) if hasattr(last, "duration") else last.get("duration", 0)
+          self._last_transcript_duration = int(float(start) + float(dur))
+        except Exception:
+          self._last_transcript_duration = None
       return full_text
     except Exception as e:
       self._report_error(
@@ -239,8 +321,9 @@ class TubeDigest:
       video_id: str,
       email_template: Optional[str] = None,
       channel_label: Optional[str] = None,
+      duration_str: Optional[str] = None,
   ) -> bool:
-    """Sends a formatted HTML email with thumbnail and video link using the specified template."""
+    """Sends a formatted HTML email with thumbnail, duration, and video link using the specified template."""
     try:
       if not email_template or not email_template.strip():
         raise ValueError(
@@ -253,6 +336,7 @@ class TubeDigest:
           markdown_content, extensions=["extra", "nl2br"]
       )
       thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+      duration_display = duration_str or "-"
 
       # Clean token substitution that never collides with CSS braces
       email_html = (
@@ -261,6 +345,8 @@ class TubeDigest:
           .replace("{thumbnail_url}", thumbnail_url)
           .replace("{html_body}", html_body)
           .replace("{video_id}", video_id)
+          .replace("{duration}", duration_display)
+          .replace("{video_duration}", duration_display)
       )
 
       msg = MIMEMultipart("alternative")

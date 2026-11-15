@@ -352,6 +352,7 @@ def handle_cli_channels(
         state_manager=state_manager,
         author_info=author_info,
         detected_channel_title=ch_label,
+        duration_seconds=meta.get("duration_seconds"),
     )
     return True
 
@@ -362,11 +363,13 @@ def handle_cli_channels(
       state_manager.log_message(UI.tip("Videos are archived during runs or with: ./tubedigest --video <URL>"))
       return True
 
-    headers = ["Video ID", "Status", "Summary", "Channel", "Processed At", "Video Title"]
+    headers = ["Video ID", "Duration", "Status", "Summary", "Channel", "Processed At", "Video Title"]
     rows = []
     for v in videos:
+      dur_str = UI.format_duration(v.get("duration_seconds"))
       rows.append([
           UI.cyan(v["video_id"]),
+          UI.yellow(dur_str),
           UI.badge_status(v.get("status")),
           UI.badge_yes_no((v.get("summary_len") or 0) > 0),
           (v.get("channel_name") or "-"),
@@ -413,9 +416,11 @@ def handle_cli_channels(
     created = v.get("created_at") or "-"
     sent_at = v.get("email_sent_at") or "-"
 
+    duration_str = UI.format_duration(v.get("duration_seconds"))
     meta = "\n".join([
         f"{UI.bold('Video ID'):<18}: {UI.cyan(video_id)}",
         f"{UI.bold('Title'):<18}: {UI.bold(title)}",
+        f"{UI.bold('Duration'):<18}: {UI.yellow(duration_str)}",
         f"{UI.bold('Channel'):<18}: {UI.magenta(channel_display)}",
         f"{UI.bold('Status'):<18}: {UI.badge_status(status)}",
         f"{UI.bold('Processed At'):<18}: {created}",
@@ -486,6 +491,7 @@ def handle_cli_channels(
         f'title: "{escaped_title}"',
         f'video_id: "{video_id}"',
         f'video_url: "{url}"',
+        f'duration: "{UI.format_duration(v.get("duration_seconds"))}"',
         f'channel: "{channel}"',
     ]
     if author and author != channel:
@@ -557,6 +563,7 @@ def process_single_video(
     state_manager: StateManager,
     author_info: Optional[dict] = None,
     detected_channel_title: Optional[str] = None,
+    duration_seconds: Optional[int] = None,
 ) -> bool:
   """Processes a single video: checks archive, fetches transcript, summarizes, emails, and archives."""
   channel_id = channel["channel_id"]
@@ -586,6 +593,7 @@ def process_single_video(
   transcript = None
 
   if existing_video:
+    duration_seconds = duration_seconds or existing_video.get("duration_seconds")
     v_status = existing_video.get("status")
     if v_status == VideoStatus.COMPLETED:
       state_manager.log_message(
@@ -622,6 +630,7 @@ def process_single_video(
           video_id,
           email_template=email_template,
           channel_label=channel_label,
+          duration_str=UI.format_duration(duration_seconds),
       )
       if email_sent:
         db.mark_video_completed(video_id)
@@ -645,10 +654,16 @@ def process_single_video(
             f"{tag} Video '{video_title}' ({UI.cyan(video_id)}) marked as PENDING_SUMMARY but transcript is empty in DB. Re-downloading transcript..."
         )
 
+  if duration_seconds is None:
+    duration_seconds = digest.get_video_duration(video_id)
+
+  dur_tag = f" [Duration: {UI.yellow(UI.format_duration(duration_seconds))}]" if duration_seconds else ""
   if transcript is None:
-    state_manager.log_message(f"{tag} Found new video: {UI.bold(video_title)} ({UI.cyan(video_id)})")
+    state_manager.log_message(f"{tag} Found new video: {UI.bold(video_title)} ({UI.cyan(video_id)}){dur_tag}")
     state_manager.log_message(f"{tag} Downloading transcript...")
     transcript = digest.get_transcript(video_id)
+    if duration_seconds is None and hasattr(digest, "_last_transcript_duration") and digest._last_transcript_duration:
+      duration_seconds = digest._last_transcript_duration
 
   if transcript:
     state_manager.log_message(f"{tag} Generating summary with Gemini (Prompt: {UI.magenta(prompt_id)})...")
@@ -666,6 +681,7 @@ def process_single_video(
           transcript=transcript,
           summary_markdown="",
           status=VideoStatus.PENDING_SUMMARY,
+          duration_seconds=duration_seconds,
       )
       state_manager.log_error(
           f"{tag} Summarization failed; transcript cached as PENDING_SUMMARY in DB. Will retry on next run without re-downloading transcript."
@@ -685,6 +701,7 @@ def process_single_video(
           transcript=transcript,
           summary_markdown=sunto_markdown,
           status=VideoStatus.PENDING_EMAIL,
+          duration_seconds=duration_seconds,
       )
       state_manager.log_error(
           f"{tag} Email template missing or blank in database for prompt '{prompt_id}'. Video summary cached as PENDING_EMAIL for automatic recovery on next run."
@@ -699,6 +716,7 @@ def process_single_video(
         video_id,
         email_template=email_template,
         channel_label=channel_label,
+        duration_str=UI.format_duration(duration_seconds),
     )
 
     if not email_sent:
@@ -711,6 +729,7 @@ def process_single_video(
           transcript=transcript,
           summary_markdown=sunto_markdown,
           status=VideoStatus.PENDING_EMAIL,
+          duration_seconds=duration_seconds,
       )
       state_manager.log_message(
           f"{tag} Email dispatch failed; video summary cached as PENDING_EMAIL for automatic recovery on next run."
@@ -726,6 +745,7 @@ def process_single_video(
         transcript=transcript,
         summary_markdown=sunto_markdown,
         status=VideoStatus.COMPLETED,
+        duration_seconds=duration_seconds,
     )
     state_manager.log_message(f"{tag} {UI.success('Video archived and processed successfully!')}")
     state_manager.log_message(UI.gray("─" * 60))
@@ -742,6 +762,7 @@ def process_single_video(
         transcript="",
         summary_markdown="",
         status=VideoStatus.NO_TRANSCRIPT,
+        duration_seconds=duration_seconds,
     )
     return True
 
@@ -818,6 +839,7 @@ def recover_pending_channel_videos(
             v_id,
             email_template=email_template,
             channel_label=channel_label,
+            duration_str=UI.format_duration(pv.get("duration_seconds")),
         )
         if email_sent:
           db.mark_video_completed(v_id)

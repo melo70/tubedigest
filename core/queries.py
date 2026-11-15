@@ -48,6 +48,7 @@ class DatabaseQueries:
         channel_id          TEXT NOT NULL,
         video_title         TEXT,
         video_url           TEXT,
+        duration_seconds    INTEGER,
         transcript          TEXT,
         summary_markdown    TEXT,
         status              TEXT DEFAULT '{VideoStatus.COMPLETED}',
@@ -233,6 +234,7 @@ class DatabaseQueries:
         COALESCE(a.author_name, c.channel_name, '-') AS author_name,
         v.video_title, 
         v.video_url, 
+        v.duration_seconds,
         v.transcript, 
         v.summary_markdown, 
         v.status, 
@@ -253,6 +255,7 @@ class DatabaseQueries:
         COALESCE(a.author_name, c.channel_name, '-') AS author_name,
         v.video_title, 
         v.video_url, 
+        v.duration_seconds,
         LENGTH(COALESCE(v.transcript, '')) AS transcript_len,
         LENGTH(COALESCE(v.summary_markdown, '')) AS summary_len,
         v.status, 
@@ -265,28 +268,28 @@ class DatabaseQueries:
   """
 
   GET_PENDING_EMAIL_VIDEOS = f"""
-    SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
+    SELECT video_id, channel_id, video_title, video_url, duration_seconds, transcript, summary_markdown, status, email_sent_at, created_at
     FROM processed_videos
     WHERE status = '{VideoStatus.PENDING_EMAIL}' AND channel_id = ?
     ORDER BY created_at ASC
   """
 
   GET_ALL_PENDING_EMAIL_VIDEOS = f"""
-    SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
+    SELECT video_id, channel_id, video_title, video_url, duration_seconds, transcript, summary_markdown, status, email_sent_at, created_at
     FROM processed_videos
     WHERE status = '{VideoStatus.PENDING_EMAIL}'
     ORDER BY created_at ASC
   """
 
   GET_PENDING_SUMMARY_VIDEOS = f"""
-    SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
+    SELECT video_id, channel_id, video_title, video_url, duration_seconds, transcript, summary_markdown, status, email_sent_at, created_at
     FROM processed_videos
     WHERE status = '{VideoStatus.PENDING_SUMMARY}' AND channel_id = ?
     ORDER BY created_at ASC
   """
 
   GET_ALL_PENDING_SUMMARY_VIDEOS = f"""
-    SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
+    SELECT video_id, channel_id, video_title, video_url, duration_seconds, transcript, summary_markdown, status, email_sent_at, created_at
     FROM processed_videos
     WHERE status = '{VideoStatus.PENDING_SUMMARY}'
     ORDER BY created_at ASC
@@ -301,12 +304,13 @@ class DatabaseQueries:
 
   SAVE_PROCESSED_VIDEO = f"""
     INSERT INTO processed_videos (
-        video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = '{VideoStatus.COMPLETED}' THEN CURRENT_TIMESTAMP ELSE NULL END)
+        video_id, channel_id, video_title, video_url, duration_seconds, transcript, summary_markdown, status, email_sent_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = '{VideoStatus.COMPLETED}' THEN CURRENT_TIMESTAMP ELSE NULL END)
     ON CONFLICT(video_id) DO UPDATE SET
         channel_id = excluded.channel_id,
         video_title = COALESCE(excluded.video_title, processed_videos.video_title),
         video_url = COALESCE(excluded.video_url, processed_videos.video_url),
+        duration_seconds = COALESCE(excluded.duration_seconds, processed_videos.duration_seconds),
         transcript = COALESCE(excluded.transcript, processed_videos.transcript),
         summary_markdown = COALESCE(excluded.summary_markdown, processed_videos.summary_markdown),
         status = excluded.status,
