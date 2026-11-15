@@ -362,6 +362,12 @@ class DatabaseManager:
       ).fetchone()
       return dict(row) if row else None
 
+  def list_processed_videos(self) -> List[Dict[str, Any]]:
+    """Retrieves all archived/processed videos joined with channel and author metadata."""
+    with self.get_connection() as conn:
+      rows = conn.execute(DatabaseQueries.LIST_PROCESSED_VIDEOS).fetchall()
+      return [dict(row) for row in rows]
+
   def get_pending_email_videos(
       self, channel_id: Optional[str] = None
   ) -> List[Dict[str, Any]]:

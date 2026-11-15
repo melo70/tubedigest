@@ -26,6 +26,12 @@ Usage:
     - Prompt management via CLI:
       ./tubedigest --list-prompts
       ./tubedigest --show-prompt <PROMPT_ID>
+
+    - Video archive, summary, and export via CLI:
+      ./tubedigest --list-videos
+      ./tubedigest --show-summary <VIDEO_ID_OR_URL>
+      ./tubedigest --export-markdown <VIDEO_ID_OR_URL> [--output <PATH>]
+      ./tubedigest --show-transcript <VIDEO_ID_OR_URL>
 """
 
 import os
@@ -356,6 +362,204 @@ def handle_cli_channels(
         author_info=author_info,
         detected_channel_title=ch_label,
     )
+    return True
+
+  if args.list_videos:
+    videos = db.list_processed_videos()
+    if not videos:
+      state_manager.log_message("No processed videos found in database.")
+      state_manager.log_message("Videos are automatically archived during pipeline runs or with: ./tubedigest --video <URL>")
+      return True
+
+    header = f"{'Video ID':<12} {'Status':<12} {'Summary':<9} {'Channel':<20} {'Processed At':<20} {'Video Title'}"
+    lines = [
+        "",
+        "=" * len(header),
+        "Archived Video Summaries (SQLite):",
+        "-" * len(header),
+        header,
+        "-" * len(header),
+    ]
+    for v in videos:
+      vid = v["video_id"]
+      status = v.get("status") or "COMPLETED"
+      has_summary = "[YES]" if (v.get("summary_len") or 0) > 0 else "[NO]"
+      channel_name = (v.get("channel_name") or "-")[:18]
+      created = str(v.get("created_at") or "-")[:19]
+      title = (v.get("video_title") or "Unknown Title")[:45]
+      lines.append(f"{vid:<12} {status:<12} {has_summary:<9} {channel_name:<20} {created:<20} {title}")
+    lines.append("=" * len(header))
+    lines.append(f"Total: {len(videos)} video(s)\n")
+    lines.append("Tip: View summary:    ./tubedigest --show-summary <VIDEO_ID>")
+    lines.append("     Export markdown: ./tubedigest --export-markdown <VIDEO_ID> [--output <PATH>]\n")
+    state_manager.log_message("\n".join(lines))
+    return True
+
+  if args.show_summary:
+    video_id = extract_video_id(args.show_summary)
+    if not video_id:
+      state_manager.log_error(
+          f"Invalid YouTube video identifier '{args.show_summary}'. Please provide an 11-character Video ID or a valid YouTube URL."
+      )
+      return True
+
+    v = db.get_processed_video(video_id)
+    if not v:
+      state_manager.log_error(f"Video '{video_id}' not found in processed videos archive.")
+      state_manager.log_message("List available videos using: ./tubedigest --list-videos")
+      return True
+
+    summary = v.get("summary_markdown")
+    if not summary or not summary.strip():
+      state_manager.log_error(f"No summary available for video '{video_id}' (Status: {v.get('status', 'UNKNOWN')}).")
+      return True
+
+    title = v.get("video_title") or f"Video ({video_id})"
+    channel = v.get("channel_name") or "-"
+    author = v.get("author_name") or "-"
+    author_str = f" ({author})" if author and author != "-" and author != channel else ""
+    channel_display = f"{channel}{author_str}"
+    url = v.get("video_url") or f"https://www.youtube.com/watch?v={video_id}"
+    status = v.get("status") or "COMPLETED"
+    created = v.get("created_at") or "-"
+    sent_at = v.get("email_sent_at") or "-"
+
+    divider = "=" * 80
+    sub_divider = "-" * 80
+
+    lines = [
+        "",
+        divider,
+        f"Video Summary: {title}",
+        divider,
+        f"{'Video ID':<15}: {video_id}",
+        f"{'Channel':<15}: {channel_display}",
+        f"{'URL':<15}: {url}",
+        f"{'Status':<15}: {status}",
+        f"{'Processed At':<15}: {created}",
+        f"{'Email Sent At':<15}: {sent_at}",
+        sub_divider,
+        "AI Summary (Markdown):",
+        sub_divider,
+        summary.strip(),
+        divider + "\n",
+    ]
+    state_manager.log_message("\n".join(lines))
+    return True
+
+  if args.export_markdown:
+    video_id = extract_video_id(args.export_markdown)
+    if not video_id:
+      state_manager.log_error(
+          f"Invalid YouTube video identifier '{args.export_markdown}'. Please provide an 11-character Video ID or a valid YouTube URL."
+      )
+      return True
+
+    v = db.get_processed_video(video_id)
+    if not v:
+      state_manager.log_error(f"Video '{video_id}' not found in processed videos archive.")
+      state_manager.log_message("List available videos using: ./tubedigest --list-videos")
+      return True
+
+    summary = v.get("summary_markdown")
+    if not summary or not summary.strip():
+      state_manager.log_error(f"No summary available for video '{video_id}' (Status: {v.get('status', 'UNKNOWN')}).")
+      return True
+
+    title = v.get("video_title") or f"Video_{video_id}"
+    channel = v.get("channel_name") or "Unknown Channel"
+    author = v.get("author_name") or ""
+    url = v.get("video_url") or f"https://www.youtube.com/watch?v={video_id}"
+    created = str(v.get("created_at") or datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    # Determine destination file path
+    if args.output_file:
+      out_path = args.output_file
+    else:
+      # Default export to exports/ directory with sanitized title
+      sanitized_title = re.sub(r'[\\/*?:"<>|]', "", title).strip().replace(" ", "_")
+      if not sanitized_title:
+        sanitized_title = video_id
+      out_dir = "exports"
+      os.makedirs(out_dir, exist_ok=True)
+      out_path = os.path.join(out_dir, f"{sanitized_title[:60]}.md")
+
+    parent_dir = os.path.dirname(os.path.abspath(out_path))
+    if parent_dir:
+      os.makedirs(parent_dir, exist_ok=True)
+
+    # Build clean markdown file with YAML frontmatter metadata
+    escaped_title = title.replace('"', '\\"')
+    frontmatter = [
+        "---",
+        f'title: "{escaped_title}"',
+        f'video_id: "{video_id}"',
+        f'video_url: "{url}"',
+        f'channel: "{channel}"',
+    ]
+    if author and author != channel:
+      frontmatter.append(f'author: "{author}"')
+    frontmatter.extend([
+        f'date: "{created}"',
+        "---",
+        "",
+        summary.strip(),
+        "",
+        "---",
+        f"*Source: [{url}]({url})*",
+        "",
+    ])
+
+    file_content = "\n".join(frontmatter)
+    with open(out_path, "w", encoding="utf-8") as f:
+      f.write(file_content)
+
+    state_manager.log_message(
+        f"✓ Summary exported successfully to '{out_path}' ({len(file_content.encode('utf-8'))} bytes)."
+    )
+    return True
+
+  if args.show_transcript:
+    video_id = extract_video_id(args.show_transcript)
+    if not video_id:
+      state_manager.log_error(
+          f"Invalid YouTube video identifier '{args.show_transcript}'. Please provide an 11-character Video ID or a valid YouTube URL."
+      )
+      return True
+
+    v = db.get_processed_video(video_id)
+    if not v:
+      state_manager.log_error(f"Video '{video_id}' not found in processed videos archive.")
+      state_manager.log_message("List available videos using: ./tubedigest --list-videos")
+      return True
+
+    transcript = v.get("transcript")
+    if not transcript or not transcript.strip():
+      state_manager.log_error(f"No transcript available for video '{video_id}'.")
+      return True
+
+    title = v.get("video_title") or f"Video ({video_id})"
+    channel = v.get("channel_name") or "-"
+    url = v.get("video_url") or f"https://www.youtube.com/watch?v={video_id}"
+
+    divider = "=" * 80
+    sub_divider = "-" * 80
+
+    lines = [
+        "",
+        divider,
+        f"Raw Transcript: {title}",
+        divider,
+        f"{'Video ID':<15}: {video_id}",
+        f"{'Channel':<15}: {channel}",
+        f"{'URL':<15}: {url}",
+        sub_divider,
+        "Transcript Text:",
+        sub_divider,
+        transcript.strip(),
+        divider + "\n",
+    ]
+    state_manager.log_message("\n".join(lines))
     return True
 
   return False
@@ -723,6 +927,39 @@ def main():
       "--show-prompt",
       metavar="PROMPT_ID",
       help="Display the full formatted text and details of an AI prompt template.",
+  )
+  parser.add_argument(
+      "--list-videos",
+      "--list-summaries",
+      dest="list_videos",
+      action="store_true",
+      help="List all processed videos and summaries stored in SQLite database.",
+  )
+  parser.add_argument(
+      "--show-summary",
+      dest="show_summary",
+      metavar="VIDEO",
+      help="Display the AI summary Markdown for an archived video (by Video ID or URL).",
+  )
+  parser.add_argument(
+      "--export-markdown",
+      "--export-summary",
+      dest="export_markdown",
+      metavar="VIDEO",
+      help="Export the AI summary to a Markdown file (by Video ID or URL).",
+  )
+  parser.add_argument(
+      "--output",
+      "-o",
+      dest="output_file",
+      metavar="PATH",
+      help="Optional output file path when exporting markdown (used with --export-markdown).",
+  )
+  parser.add_argument(
+      "--show-transcript",
+      dest="show_transcript",
+      metavar="VIDEO",
+      help="Display the raw transcript text for an archived video (by Video ID or URL).",
   )
 
   args = parser.parse_args()

@@ -22,6 +22,7 @@ __pycache__/
 # Dati di Runtime & Log di TubeDigest
 # ==============================================================================
 logs/
+exports/
 *.log
 tubedigest.log
 *.db

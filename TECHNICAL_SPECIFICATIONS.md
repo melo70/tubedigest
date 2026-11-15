@@ -29,6 +29,7 @@ The project is structured with an internal `core/` package divided into the foll
 ├── templates/               # External default templates (prompts and email layout)
 │   ├── default_prompt.txt
 │   └── default_email.html
+├── exports/                 # Export directory for Markdown video summaries (ignored by Git)
 ├── data/                    # Local SQLite database directory (ignored by Git)
 │   └── .gitkeep
 ├── /core                    # Python package for internal application modules
@@ -79,7 +80,8 @@ Database logic is split between a dedicated SQL query repository and an operatio
   * `upsert_channel_author(...)`: Automatically updates author biographical information when detected from RSS feeds.
   * `get_active_channels()`: Returns active channels for batch processing.
   * `is_video_processed(video_id)`: Instant index lookup preventing duplicate processing.
-  * `get_processed_video(video_id)`: Returns stored video record including processing status and cached summary.
+  * `get_processed_video(video_id)`: Returns stored video record including processing status, cached summary, and channel/author details.
+  * `list_processed_videos()`: Returns all processed video records joined with channel and author metadata.
   * `get_pending_email_videos(...)`: Retrieves videos in `PENDING_EMAIL` status for recovery.
   * `mark_video_completed(video_id)`: Updates status to `COMPLETED` and stamps `email_sent_at`.
   * `save_processed_video(...)`: Archives the video, transcript, and generated summary with status (`COMPLETED`, `PENDING_EMAIL`, `NO_TRANSCRIPT`).
@@ -117,7 +119,7 @@ The main entry point coordinates CLI management and pipeline execution:
 1. **Global Exception Interception (`sys.excepthook`)**: Captures unhandled crashes globally. Prevents terminal clutter by displaying polite error summaries on screen while logging complete diagnostic tracebacks as `[CRITICAL]` in `logs/tubedigest.log`.
 2. **Early State & Logging Setup**: Loads `config.toml` and initializes `StateManager` so all subsequent operations are traced.
 3. **Database Setup**: Connects to SQLite (`DatabaseManager`), handling channel and prompt migrations.
-4. **CLI Handler**: Processes `--add-channel`, `--disable-channel` (or `--deactivate-channel`), `--enable-channel` (or `--activate-channel`), `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, `--show-prompt`, and `--video` (or `-v`) arguments.
+4. **CLI Handler**: Processes `--add-channel`, `--disable-channel` (or `--deactivate-channel`), `--enable-channel` (or `--activate-channel`), `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, `--show-prompt`, `--video` (or `-v`), `--list-videos` (or `--list-summaries`), `--show-summary`, `--export-markdown` (or `--export-summary`), and `--show-transcript` arguments.
 5. **Automated Pipeline**: Iterates through active channels (or single target channel via `--channel` / `-c`, or target individual video via `--video`), automatically recovering any `PENDING_EMAIL` videos whose templates are now configured, detecting new uploads, transcribing subtitles, prompting Gemini, delivering HTML emails, and persisting state into SQLite archives.
 
 ---

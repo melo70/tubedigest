@@ -224,10 +224,42 @@ class DatabaseQueries:
   """
 
   GET_PROCESSED_VIDEO = """
-    SELECT video_id, channel_id, video_title, video_url, transcript, summary_markdown, status, email_sent_at, created_at
-    FROM processed_videos
-    WHERE video_id = ?
+    SELECT 
+        v.video_id, 
+        v.channel_id, 
+        COALESCE(c.channel_name, a.channel_title, a.author_name, v.channel_id) AS channel_name,
+        COALESCE(a.author_name, c.channel_name, '-') AS author_name,
+        v.video_title, 
+        v.video_url, 
+        v.transcript, 
+        v.summary_markdown, 
+        v.status, 
+        v.email_sent_at, 
+        v.created_at
+    FROM processed_videos v
+    LEFT JOIN channels c ON v.channel_id = c.channel_id
+    LEFT JOIN channel_authors a ON v.channel_id = a.channel_id
+    WHERE v.video_id = ?
     LIMIT 1
+  """
+
+  LIST_PROCESSED_VIDEOS = """
+    SELECT 
+        v.video_id, 
+        v.channel_id, 
+        COALESCE(c.channel_name, a.channel_title, a.author_name, v.channel_id) AS channel_name,
+        COALESCE(a.author_name, c.channel_name, '-') AS author_name,
+        v.video_title, 
+        v.video_url, 
+        LENGTH(COALESCE(v.transcript, '')) AS transcript_len,
+        LENGTH(COALESCE(v.summary_markdown, '')) AS summary_len,
+        v.status, 
+        v.email_sent_at, 
+        v.created_at
+    FROM processed_videos v
+    LEFT JOIN channels c ON v.channel_id = c.channel_id
+    LEFT JOIN channel_authors a ON v.channel_id = a.channel_id
+    ORDER BY v.created_at DESC
   """
 
   GET_PENDING_EMAIL_VIDEOS = """
