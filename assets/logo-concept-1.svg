@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGlow" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#1e1e2e" />
+      <stop offset="100%" stop-color="#0f0f17" />
+    </radialGradient>
+
+    <!-- Retro Tube Gradient: Cyan -> Magenta -> Coral -->
+    <linearGradient id="cyberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f5d4" />
+      <stop offset="50%" stop-color="#b5179e" />
+      <stop offset="100%" stop-color="#f72585" />
+    </linearGradient>
+
+    <!-- Play Button Gradient -->
+    <linearGradient id="playGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f72585" />
+      <stop offset="100%" stop-color="#ff0055" />
+    </linearGradient>
+
+    <!-- Gemini Sparkle Gradient -->
+    <linearGradient id="sparkleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#00f5d4" />
+      <stop offset="100%" stop-color="#7209b7" />
+    </linearGradient>
+
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Container Base -->
+  <rect width="512" height="512" rx="100" fill="url(#bgGlow)" />
+  <rect width="506" height="506" x="3" y="3" rx="97" fill="none" stroke="url(#cyberGrad)" stroke-width="3" stroke-opacity="0.4" />
+
+  <!-- Outer CRT TV / Terminal Monitor Frame -->
+  <rect x="86" y="80" width="340" height="260" rx="36" fill="#181825" stroke="url(#cyberGrad)" stroke-width="6" filter="url(#neonGlow)" />
+
+  <!-- Inner Monitor Glass Screen -->
+  <rect x="104" y="98" width="304" height="224" rx="24" fill="#11111b" stroke="#313244" stroke-width="2" />
+
+  <!-- CRT Screen Glare Arc -->
+  <path d="M 120 115 Q 256 140 380 118" stroke="#ffffff" stroke-opacity="0.08" stroke-width="4" fill="none" stroke-linecap="round" />
+
+  <!-- Left: The Video Play Symbol -->
+  <path d="M 175 160 L 245 205 L 175 250 Z" fill="url(#playGrad)" filter="url(#neonGlow)" />
+
+  <!-- Right: Dynamic Digest Lines (Synthesized Knowledge) -->
+  <line x1="270" y1="175" x2="365" y2="175" stroke="#00f5d4" stroke-width="8" stroke-linecap="round" filter="url(#neonGlow)" />
+  <line x1="270" y1="205" x2="345" y2="205" stroke="#b5179e" stroke-width="8" stroke-linecap="round" />
+  <line x1="270" y1="235" x2="320" y2="235" stroke="#f72585" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Gemini AI Sparkle / Star (Top Right of Monitor) -->
+  <g transform="translate(385, 80) scale(1.1)" filter="url(#neonGlow)">
+    <path d="M 0,-32 Q 0,0 32,0 Q 0,0 0,32 Q 0,0 -32,0 Q 0,0 0,-32 Z" fill="url(#sparkleGrad)" />
+  </g>
+
+  <!-- Small Auxiliary AI Sparkle -->
+  <g transform="translate(130, 285) scale(0.45)">
+    <path d="M 0,-24 Q 0,0 24,0 Q 0,0 0,24 Q 0,0 -24,0 Q 0,0 0,-24 Z" fill="#00f5d4" />
+  </g>
+
+  <!-- Terminal Stand / Pedestal -->
+  <path d="M 220 340 L 205 385 L 307 385 L 292 340 Z" fill="#181825" stroke="#313244" stroke-width="2" />
+  <rect x="180" y="385" width="152" height="12" rx="6" fill="#313244" />
+
+  <!-- Logo Typography -->
+  <text x="256" y="445" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="34" letter-spacing="4" fill="#ffffff">
+    TUBE<tspan fill="#00f5d4">DIGEST</tspan>
+  </text>
+  <text x="256" y="472" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="12" letter-spacing="6" fill="#a6adc8">
+    AI MONITOR &amp; SUMMARY
+  </text>
+</svg>

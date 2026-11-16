@@ -1,10 +1,21 @@
-# TubeDigest 📺 ✉️ 🤖
+<p align="center">
+  <img src="assets/logo.svg" alt="TubeDigest Logo" width="220">
+</p>
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![AI Powered](https://img.shields.io/badge/AI-Google%20Gemini-orange.svg)](https://ai.google.dev/)
-[![Database](https://img.shields.io/badge/Database-SQLite3-green.svg)](https://www.sqlite.org/)
-[![Development Metrics](https://img.shields.io/badge/Metrics-AI%20Telemetry%20Report-purple.svg)](DEVELOPMENT_METRICS.md)
-[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+<h1 align="center">TubeDigest</h1>
+
+<p align="center">
+  <b>Automated YouTube Monitor &amp; Gemini AI Digest Pipeline</b><br>
+  <i>Lightweight, quota-free YouTube channel tracking with structured AI summaries delivered straight to your inbox.</i>
+</p>
+
+<p align="center">
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+"></a>
+  <a href="https://ai.google.dev/"><img src="https://img.shields.io/badge/AI-Google%20Gemini-orange.svg" alt="AI Powered"></a>
+  <a href="https://www.sqlite.org/"><img src="https://img.shields.io/badge/Database-SQLite3-green.svg" alt="Database"></a>
+  <a href="DEVELOPMENT_METRICS.md"><img src="https://img.shields.io/badge/Metrics-AI%20Telemetry%20Report-purple.svg" alt="Development Metrics"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPLv3"></a>
+</p>
 
 **TubeDigest** is a lightweight, headless Python automation pipeline designed to run seamlessly on Linux servers or Raspberry Pi devices. 
 
@@ -43,7 +54,8 @@ It continuously monitors multiple YouTube channels via RSS feeds, downloads new 
 
 ```text
 tubedigest/
-├── assets/                  # Project media and animated showcase GIFs
+├── assets/                  # Project media, animated showcase, and official vector logo
+│   ├── logo.svg
 │   └── demo.gif
 ├── docs/                    # Documentation and VHS recording scripts
 │   └── demo.tape

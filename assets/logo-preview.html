@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>TubeDigest Logo Concepts Showcase</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .glass-card {
+      background: rgba(30, 30, 46, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .glass-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(0, 245, 212, 0.4);
+      box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 245, 212, 0.15);
+    }
+    .svg-container svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body class="bg-[#0c0d14] text-[#cdd6f4] min-h-screen p-6 font-sans">
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Header Section -->
+    <div class="text-center space-y-2 pb-4 border-b border-[#313244]/50">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#181825] border border-[#313244] text-xs font-mono text-[#00f5d4]">
+        <span>✨ Visual Identity Review</span>
+        <span>•</span>
+        <span>SVG Vector Quality</span>
+      </div>
+      <h1 class="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+        TubeDigest <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#00f5d4] via-[#b5179e] to-[#f72585]">Logo Concepts</span>
+      </h1>
+      <p class="text-sm text-[#a6adc8] max-w-2xl mx-auto">
+        Tre proposte di identità visiva vettoriale concepite per l'header del README di GitHub, l'avatar del repository e la social card.
+      </p>
+    </div>
+
+    <!-- Backdrop Switcher Controls -->
+    <div class="flex items-center justify-between bg-[#181825]/80 px-4 py-2.5 rounded-xl border border-[#313244]/60">
+      <span class="text-xs font-medium text-[#bac2de]">Sfondo Anteprima:</span>
+      <div class="flex gap-2 text-xs">
+        <button onclick="setTheme('dark')" id="btn-dark" class="px-3 py-1 rounded-lg bg-[#313244] text-white font-medium transition">
+          🌙 Dark Obsidian
+        </button>
+        <button onclick="setTheme('github')" id="btn-github" class="px-3 py-1 rounded-lg bg-[#181825] text-[#a6adc8] hover:text-white transition">
+          🐙 GitHub Canvas
+        </button>
+        <button onclick="setTheme('light')" id="btn-light" class="px-3 py-1 rounded-lg bg-[#181825] text-[#a6adc8] hover:text-white transition">
+          ☀️ Crisp Light
+        </button>
+      </div>
+    </div>
+
+    <!-- Concepts Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      <!-- Concept 1 Card -->
+      <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono px-2.5 py-1 rounded-md bg-[#00f5d4]/10 text-[#00f5d4] border border-[#00f5d4]/20 font-semibold">
+              CONCEPT 01
+            </span>
+            <span class="text-xs text-[#a6adc8]">Cyberpunk / TUI</span>
+          </div>
+          <h2 class="text-lg font-bold text-white">The Terminal CRT &amp; AI Spark</h2>
+          <p class="text-xs text-[#a6adc8] leading-relaxed">
+            Monitor CRT vintage con vetro scuro, tasto Play e 3 linee di sintesi che convergono nella stella AI di Gemini. Coerente al 100% con il gradiente retrò della CLI.
+          </p>
+
+          <!-- SVG Box -->
+          <div id="box-1" class="aspect-square rounded-xl bg-[#090a0f] p-4 flex items-center justify-center border border-[#313244] shadow-inner transition-colors duration-300">
+            <img src="logo-concept-1.svg" class="w-48 h-48 drop-shadow-2xl" alt="Concept 1">
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-[#313244]/60 text-xs text-[#a6adc8] flex items-center justify-between">
+          <span class="text-[#00f5d4] font-medium">✓ Alta identità hacker</span>
+          <span class="font-mono text-[10px] text-[#6c7086]">assets/logo-concept-1.svg</span>
+        </div>
+      </div>
+
+      <!-- Concept 2 Card -->
+      <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono px-2.5 py-1 rounded-md bg-[#ff0055]/10 text-[#ff0055] border border-[#ff0055]/20 font-semibold">
+              CONCEPT 02
+            </span>
+            <span class="text-xs text-[#a6adc8]">Modern Flat / Clean</span>
+          </div>
+          <h2 class="text-lg font-bold text-white">The Folded Paper Play</h2>
+          <p class="text-xs text-[#a6adc8] leading-relaxed">
+            Foglio di documento editoriale con angolo piegato. Emblema Play centrale con badge di sintesi Markdown a tre colori e scintilla Gemini sul vertice.
+          </p>
+
+          <!-- SVG Box -->
+          <div id="box-2" class="aspect-square rounded-xl bg-[#090a0f] p-4 flex items-center justify-center border border-[#313244] shadow-inner transition-colors duration-300">
+            <img src="logo-concept-2.svg" class="w-48 h-48 drop-shadow-2xl" alt="Concept 2">
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-[#313244]/60 text-xs text-[#a6adc8] flex items-center justify-between">
+          <span class="text-[#ff0055] font-medium">✓ Sofisticato ed elegante</span>
+          <span class="font-mono text-[10px] text-[#6c7086]">assets/logo-concept-2.svg</span>
+        </div>
+      </div>
+
+      <!-- Concept 3 Card -->
+      <div class="glass-card rounded-2xl p-5 flex flex-col justify-between">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-mono px-2.5 py-1 rounded-md bg-[#00ff88]/10 text-[#00ff88] border border-[#00ff88]/20 font-semibold">
+              CONCEPT 03
+            </span>
+            <span class="text-xs text-[#a6adc8]">Pipeline &amp; Transformation</span>
+          </div>
+          <h2 class="text-lg font-bold text-white">The Gemini Video Prism</h2>
+          <p class="text-xs text-[#a6adc8] leading-relaxed">
+            Raffigura l'intera pipeline: il video YouTube a sinistra entra nel prisma a stella Gemini al centro, uscendo a destra come scheda di sintesi con badge di durata.
+          </p>
+
+          <!-- SVG Box -->
+          <div id="box-3" class="aspect-square rounded-xl bg-[#090a0f] p-4 flex items-center justify-center border border-[#313244] shadow-inner transition-colors duration-300">
+            <img src="logo-concept-3.svg" class="w-48 h-48 drop-shadow-2xl" alt="Concept 3">
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-[#313244]/60 text-xs text-[#a6adc8] flex items-center justify-between">
+          <span class="text-[#00ff88] font-medium">✓ Narrativo e descrittivo</span>
+          <span class="font-mono text-[10px] text-[#6c7086]">assets/logo-concept-3.svg</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Recommendations / Decision Helper -->
+    <div class="bg-[#181825] rounded-xl p-4 border border-[#313244] text-xs text-[#a6adc8] flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>
+        <span class="font-bold text-white">💡 Suggerimento del Designer:</span>
+        <span class="ml-1">Il <strong>Concept 1</strong> è il più iconico per l'identità hacker/terminale del progetto; il <strong>Concept 2</strong> è il più versatile e sobrio per avatar rotondi su GitHub.</span>
+      </div>
+      <div class="text-right text-[#6c7086] font-mono text-[11px] whitespace-nowrap">
+        Tutti i file sono salvati in assets/*.svg
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function setTheme(theme) {
+      const boxes = [document.getElementById('box-1'), document.getElementById('box-2'), document.getElementById('box-3')];
+      const btnDark = document.getElementById('btn-dark');
+      const btnGh = document.getElementById('btn-github');
+      const btnLight = document.getElementById('btn-light');
+
+      [btnDark, btnGh, btnLight].forEach(b => {
+        b.className = "px-3 py-1 rounded-lg bg-[#181825] text-[#a6adc8] hover:text-white transition";
+      });
+
+      if (theme === 'dark') {
+        boxes.forEach(b => b.className = "aspect-square rounded-xl bg-[#090a0f] p-4 flex items-center justify-center border border-[#313244] shadow-inner transition-colors duration-300");
+        btnDark.className = "px-3 py-1 rounded-lg bg-[#313244] text-white font-medium transition";
+      } else if (theme === 'github') {
+        boxes.forEach(b => b.className = "aspect-square rounded-xl bg-[#0d1117] p-4 flex items-center justify-center border border-[#30363d] shadow-inner transition-colors duration-300");
+        btnGh.className = "px-3 py-1 rounded-lg bg-[#30363d] text-white font-medium transition";
+      } else if (theme === 'light') {
+        boxes.forEach(b => b.className = "aspect-square rounded-xl bg-[#f6f8fa] p-4 flex items-center justify-center border border-[#d0d7de] shadow-inner transition-colors duration-300");
+        btnLight.className = "px-3 py-1 rounded-lg bg-[#e2e8f0] text-gray-900 font-medium transition";
+      }
+    }
+  </script>
+</body>
+</html>
