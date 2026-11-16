@@ -349,4 +349,4 @@ TubeDigest is engineered for automated, unattended operation:
 ## 📄 License
 
 This project is licensed under the terms of the [GNU General Public License v3.0 (GPLv3)](LICENSE).
-Copyright (C) 2026 melo70.
+Copyright (C) 2026 Carmelo Gargano.
