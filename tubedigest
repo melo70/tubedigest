@@ -867,9 +867,10 @@ def recover_pending_channel_videos(
         )
         if email_sent:
           db.mark_video_completed(v_id)
-          state_manager.log_message(
-              f"{tag} {UI.success(f'Video \'{v_title}\' ({UI.cyan(v_id)}) successfully recovered and marked as COMPLETED!')}"
+          rec_msg = UI.success(
+              f"Video '{v_title}' ({UI.cyan(v_id)}) successfully recovered and marked as COMPLETED!"
           )
+          state_manager.log_message(f"{tag} {rec_msg}")
           state_manager.log_message(UI.gray("─" * 60))
         else:
           state_manager.log_message(f"{tag} Recovery dispatch failed for video '{v_title}' ({v_id}).")
