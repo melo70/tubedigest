@@ -51,6 +51,7 @@ The project is structured with an internal `core/` package divided into the foll
 
 The configuration file must contain the following sections and keys:
 
+* `[general]`: `language` (default output summary and transcript priority language, e.g. `"en"`, `"it"`, `"es"`, `"zh"`, `"hi"`).
 * `[youtube]`: `feed_url_template` (RSS feed URL template containing the `{channel_id}` placeholder).
 * `[gemini]`: `api_key` (Google Gemini API key) and `model` (e.g., `gemini-2.5-flash`).
 * `[email]`: SMTP parameters (`sender`, `password`, `receiver`, `smtp_server`, `smtp_port`).
@@ -67,11 +68,12 @@ Database logic is split between domain data types, a dedicated SQL query reposit
 * **`DatabaseManager` (`core/database.py`)**: Executes queries, handles connections, transactions, and foreign keys.
 * **Schema Tables**:
   * `prompts`: `prompt_id` (PK), `prompt_title`, `prompt_text`, `email_template`, `is_default`, `created_at`, `updated_at`.
-  * `channels`: `channel_id` (PK), `channel_name`, `prompt_id` (FK -> prompts), `is_active`, `last_checked_at`, `created_at`.
+  * `channels`: `channel_id` (PK), `channel_name`, `prompt_id` (FK -> prompts), `output_language`, `is_active`, `last_checked_at`, `created_at`.
   * `channel_authors`: `channel_id` (PK, FK -> channels), `author_name`, `author_url`, `channel_title`, `custom_url`, `updated_at`.
   * `processed_videos`: `video_id` (PK), `channel_id` (FK -> channels), `video_title`, `video_url`, `duration_seconds`, `transcript`, `summary_markdown`, `status`, `email_sent_at`, `created_at`.
 * **Key Methods**:
-  * `add_channel(...)`: Adds or reactivates a channel in SQLite linked to a `prompt_id` and auto-populates author metadata.
+  * `add_channel(...)`: Adds or reactivates a channel in SQLite linked to a `prompt_id`, optional `output_language`, and auto-populates author metadata.
+  * `set_channel_language(...)`: Sets or updates the output summary language for a channel by ID or Name.
   * `set_channel_active(...)`: Enables (`is_active = 1`) or disables (`is_active = 0`) a channel by Channel ID or Name.
   * `find_channel_for_video(...)`: Locates a tracked channel record matching a video's channel ID, channel name, or author name.
   * `remove_channel(...)`: Explicit cascading delete of a channel and all associated records across tables (`channel_authors`, `processed_videos`) by Channel ID or Name.
@@ -117,8 +119,8 @@ The `TubeDigest` class encapsulates all interactions with external services:
 * **`get_latest_video()`**: Parses the YouTube RSS feed using `_fetch_rss_feed`. Extracts the latest published video (`video_id`, `video_title`, `channel_title`, `author_info`). Returns `None` tuples upon failure without crashing.
 * **`get_video_details(video_id)`**: Resolves video title, author, channel ID, and duration in seconds for an arbitrary YouTube video using standard oEmbed and watch page metadata extraction without requiring a YouTube Data API key.
 * **`get_video_duration(video_id)`**: Retrieves exact video duration in seconds via watch page HTML player response (`lengthSeconds`, `approxDurationMs`, ISO 8601 duration) or subtitle timestamp fallbacks.
-* **`get_transcript(video_id)`**: Extracts the text transcript using `youtube_transcript_api`. Catches exceptions (`TranscriptsDisabled`, `NoTranscriptFound`, network drops), logs the stack trace to the log file, and returns `None`.
-* **`summarize_transcript(video_title, transcript, prompt_template)`**: Injects `video_title` and `transcript` into the template loaded from SQLite. Submits request via `client.models.generate_content`. If an API or quota error occurs, records the traceback and returns `None`; the pipeline caches the downloaded transcript into SQLite under `PENDING_SUMMARY` so it is safely retried on subsequent runs without re-downloading subtitles from YouTube.
+* **`get_transcript(video_id, preferred_languages=None)`**: Extracts the text transcript using `youtube_transcript_api`. Prioritizes the channel's configured language, then system global language, then common fallbacks (`en`, `it`, `es`, `fr`, `de`), and ultimately falls back to the first available transcript in any language (manual or auto-generated). Logs exceptions to the log file and returns `None` if no transcript exists.
+* **`summarize_transcript(video_title, transcript, prompt_template=None, output_language=None)`**: Injects `video_title`, `transcript`, and localized `{output_language}` into the template loaded from SQLite. If the template lacks `{output_language}`, appends a critical instruction to enforce the target output language. Submits request via `client.models.generate_content`. If an API or quota error occurs, records the traceback and returns `None`; the pipeline caches the downloaded transcript into SQLite under `PENDING_SUMMARY` so it is safely retried on subsequent runs without re-downloading subtitles from YouTube.
 * **`send_email(subject, markdown_content, video_url, video_id, email_template=None, channel_label=None, duration_str=None)`**: Converts Markdown content into HTML using `markdown`. Embeds the YouTube thumbnail (`https://img.youtube.com/vi/{video_id}/hqdefault.jpg`) and duration badge (`{duration}`) into the prompt's customized HTML layout loaded from SQLite and transmits the email via authenticated STARTTLS SMTP. Returns `True` on success and `False` on failure, preventing incomplete states from being marked as completed.
 
 ---
@@ -129,8 +131,8 @@ The main entry point coordinates CLI management and pipeline execution:
 
 1. **Global Exception Interception (`sys.excepthook`)**: Captures unhandled crashes globally. Prevents terminal clutter by displaying polite error summaries on screen while logging complete diagnostic tracebacks as `[CRITICAL]` in `logs/tubedigest.log`.
 2. **Early State & Logging Setup**: Loads `config.toml` and initializes `StateManager` so all subsequent operations are traced.
-3. **Database Setup**: Connects to SQLite (`DatabaseManager`), handling channel and prompt migrations.
-4. **CLI Handler**: Processes `--add-channel` (supporting automatic channel resolution from Channel ID, URL, handle, or any video URL/ID), `--disable-channel` (or `--deactivate-channel`), `--enable-channel` (or `--activate-channel`), `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, `--show-prompt`, `--add-video` (or `--video`, `-v`), `--list-videos` (or `--list-summaries`), `--show-summary`, `--export-markdown` (or `--export-summary`), `--show-transcript`, and `--delete-video` (or `--remove-video`) arguments.
+3. **Database Setup**: Connects to SQLite (`DatabaseManager`), handling channel, prompt, and column migrations.
+4. **CLI Handler**: Processes `--add-channel` (supporting `--lang`, `--prompt`, and automatic resolution from Channel ID, URL, handle, or any video URL/ID), `--set-language`, `--disable-channel` (or `--deactivate-channel`), `--enable-channel` (or `--activate-channel`), `--delete-channel` (or `--remove-channel`), `--list-channels`, `--list-prompts`, `--show-prompt`, `--add-video` (or `--video`, `-v`), `--list-videos` (or `--list-summaries`), `--show-summary`, `--export-markdown` (or `--export-summary`), `--show-transcript`, and `--delete-video` (or `--remove-video`) arguments.
 5. **Two-Tier Resilient Pipeline**: Iterates through active channels (or single target channel via `--channel` / `-c`, or target individual video via `--add-video`), executing a resilient two-tier recovery mechanism:
    * **Tier 1 (AI Recovery - `PENDING_SUMMARY`)**: Re-attempts Gemini summarization using SQLite-cached transcripts, eliminating unnecessary YouTube subtitle downloads.
    * **Tier 2 (Email Recovery - `PENDING_EMAIL`)**: Re-attempts SMTP delivery using SQLite-cached Markdown summaries, bypassing both YouTube downloads and Gemini API calls.

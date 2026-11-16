@@ -17,8 +17,9 @@ Usage:
       ./tubedigest --add-video <VIDEO_ID_OR_URL>
 
     - Channel management via CLI:
-      ./tubedigest --add-channel <TARGET> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
+      ./tubedigest --add-channel <TARGET> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>] [--lang <LANG>]
       (TARGET accepts Channel ID, URL, @handle, or any Video URL/ID from that channel)
+      ./tubedigest --set-language <CHANNEL_ID_OR_NAME> <LANG>
       ./tubedigest --disable-channel <CHANNEL_ID_OR_NAME>
       ./tubedigest --enable-channel <CHANNEL_ID_OR_NAME>
       ./tubedigest --delete-channel <CHANNEL_ID_OR_NAME>
@@ -176,6 +177,9 @@ def handle_cli_channels(
     raw_target = args.add_channel.strip()
     channel_name = args.name
     prompt_id = args.prompt or "default"
+    output_language = getattr(args, "output_language", None)
+    if output_language:
+      output_language = output_language.strip().lower()
 
     state_manager.log_message(f"Resolving YouTube channel for '{raw_target}'...")
     resolved = digest.resolve_channel_target(raw_target) if digest else None
@@ -208,15 +212,33 @@ def handle_cli_channels(
         author_name=author_name,
         author_url=author_url,
         channel_title=channel_title,
+        output_language=output_language,
     )
     name_display = f" '{channel_name}'" if channel_name else ""
     author_display = f" by '{author_name}'" if author_name else ""
+    lang_display = f" in language '{output_language}'" if output_language else ""
     prompt_display = f" using prompt '{prompt_id}'"
     resolved_from = resolved.get("resolved_from")
     resolved_display = f" [resolved from {resolved_from}]" if resolved_from and resolved_from != "channel_id" else ""
     state_manager.log_message(
-        UI.success(f"Channel{name_display} ({UI.cyan(channel_id)}) added/updated successfully{author_display}{prompt_display}{resolved_display}.")
+        UI.success(f"Channel{name_display} ({UI.cyan(channel_id)}) added/updated successfully{author_display}{lang_display}{prompt_display}{resolved_display}.")
     )
+    return True
+
+  if getattr(args, "set_language", None):
+    ch_target, new_lang = args.set_language
+    new_lang_clean = new_lang.strip().lower()
+    res = db.set_channel_language(ch_target, new_lang_clean)
+    if res and res.get("success"):
+      ch_id = res["channel_id"]
+      ch_name = res["channel_name"]
+      name_str = f" '{ch_name}'" if ch_name else ""
+      state_manager.log_message(
+          UI.success(f"Channel{name_str} ({UI.cyan(ch_id)}) output language updated to {UI.yellow(new_lang_clean)}.")
+      )
+    else:
+      state_manager.log_error(f"Channel '{ch_target}' not found in database.")
+      state_manager.log_message(UI.tip("List available channels: ./tubedigest --list-channels"))
     return True
 
   if args.disable_channel:
@@ -275,25 +297,29 @@ def handle_cli_channels(
     channels = db.list_channels()
     if not channels:
       state_manager.print_screen(UI.warning("No channels found in database."))
-      state_manager.print_screen(UI.tip("Add a channel: ./tubedigest --add-channel <TARGET> [--name <NAME>]"))
+      state_manager.print_screen(UI.tip("Add a channel: ./tubedigest --add-channel <TARGET> [--lang <LANG>] [--name <NAME>]"))
       return True
 
-    headers = ["Status", "Channel ID", "Channel Name", "Author / Creator", "Prompt ID"]
+    headers = ["Status", "Channel ID", "Channel Name", "Author / Creator", "Language", "Prompt ID"]
     rows = []
+    def_lang = getattr(digest, "default_language", "en") if digest else "en"
     for ch in channels:
+      ch_lang = ch.get("output_language")
+      lang_str = UI.yellow(ch_lang) if ch_lang else UI.gray(f"{def_lang}*")
       rows.append([
           UI.badge_active(ch["is_active"]),
           UI.cyan(ch["channel_id"]),
           (ch["channel_name"] or "Unknown"),
           (ch.get("author_name") or "-"),
+          lang_str,
           UI.magenta(ch.get("prompt_id") or "default"),
       ])
     table = UI.draw_table("Tracked YouTube Channels (SQLite)", headers, rows)
     footer = [
         UI.banner(),
         table,
-        f"  {UI.bold('Total:')} {len(channels)} channel(s)\n",
-        UI.tip("Add channel: ./tubedigest --add-channel <TARGET> [--name <NAME>]\n"),
+        f"  {UI.bold('Total:')} {len(channels)} channel(s)   {UI.gray('(*inherited from config.toml)')}\n",
+        UI.tip("Add channel: ./tubedigest --add-channel <TARGET> [--lang <LANG>] [--name <NAME>]\n"),
     ]
     state_manager.print_screen("\n".join(footer))
     return True
@@ -682,15 +708,22 @@ def process_single_video(
   if transcript is None:
     state_manager.log_message(f"{tag} Found new video: {UI.bold(video_title)} ({UI.cyan(video_id)}){dur_tag}")
     state_manager.log_message(f"{tag} Downloading transcript...")
-    transcript = digest.get_transcript(video_id)
+    ch_lang = channel.get("output_language")
+    preferred_langs = [ch_lang] if ch_lang else None
+    transcript = digest.get_transcript(video_id, preferred_languages=preferred_langs)
     if duration_seconds is None and hasattr(digest, "_last_transcript_duration") and digest._last_transcript_duration:
       duration_seconds = digest._last_transcript_duration
 
   if transcript:
-    state_manager.log_message(f"{tag} Generating summary with Gemini (Prompt: {UI.magenta(prompt_id)})...")
+    ch_lang = channel.get("output_language")
+    lang_info = f" [Language: {UI.yellow(ch_lang)}]" if ch_lang else ""
+    state_manager.log_message(f"{tag} Generating summary with Gemini (Prompt: {UI.magenta(prompt_id)}){lang_info}...")
     prompt_template = db.get_prompt_text(prompt_id)
     sunto_markdown = digest.summarize_transcript(
-        video_title, transcript, prompt_template=prompt_template
+        video_title,
+        transcript,
+        prompt_template=prompt_template,
+        output_language=ch_lang,
     )
 
     if not sunto_markdown:
@@ -965,6 +998,19 @@ def main():
       "--prompt",
       metavar="PROMPT_ID",
       help="Optional ID of prompt template in database (defaults to 'default').",
+  )
+  parser.add_argument(
+      "--lang",
+      "--language",
+      dest="output_language",
+      metavar="LANG",
+      help="Optional output summary language for the channel (e.g. 'it', 'en', 'es', 'zh', 'hi'). If omitted, inherits global language from config.toml.",
+  )
+  parser.add_argument(
+      "--set-language",
+      nargs=2,
+      metavar=("CHANNEL", "LANG"),
+      help="Set or update output summary language for a tracked channel (by ID or Name).",
   )
   parser.add_argument(
       "--channel",

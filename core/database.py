@@ -58,6 +58,12 @@ class DatabaseManager:
       if v_columns and "duration_seconds" not in v_columns:
         conn.execute("ALTER TABLE processed_videos ADD COLUMN duration_seconds INTEGER")
 
+      # Migration safeguard: if channels table is missing output_language column, migrate it
+      c_cursor = conn.execute("PRAGMA table_info(channels)")
+      c_columns = [row["name"] for row in c_cursor.fetchall()]
+      if c_columns and "output_language" not in c_columns:
+        conn.execute("ALTER TABLE channels ADD COLUMN output_language TEXT")
+
       # Seed default prompt and email layout from external template files
       default_prompt_text = self.load_template_file("default_prompt.txt")
       default_email_html = self.load_template_file("default_email.html")
@@ -70,6 +76,12 @@ class DatabaseManager:
               default_prompt_text,
               default_email_html,
           ),
+      )
+
+      # Ensure existing default prompt has latest template with {output_language} support
+      conn.execute(
+          "UPDATE prompts SET prompt_text = ? WHERE prompt_id = ? AND prompt_text LIKE '%in lingua italiana%'",
+          (default_prompt_text, DatabaseQueries.DEFAULT_PROMPT_ID),
       )
 
       # Ensure existing default prompt has latest email_template
@@ -211,6 +223,7 @@ class DatabaseManager:
       author_name: Optional[str] = None,
       author_url: Optional[str] = None,
       channel_title: Optional[str] = None,
+      output_language: Optional[str] = None,
   ) -> bool:
     """Adds a new channel or reactivates/updates an existing one, automatically populating author profile."""
     resolved_prompt_id = prompt_id or "default"
@@ -226,12 +239,12 @@ class DatabaseManager:
       if existing:
         conn.execute(
             DatabaseQueries.UPDATE_CHANNEL,
-            (channel_name, resolved_prompt_id, channel_id),
+            (channel_name, resolved_prompt_id, output_language, channel_id),
         )
       else:
         conn.execute(
             DatabaseQueries.INSERT_CHANNEL,
-            (channel_id, channel_name, resolved_prompt_id),
+            (channel_id, channel_name, resolved_prompt_id, output_language),
         )
 
       # Automatically populate or update channel_authors metadata
@@ -242,6 +255,27 @@ class DatabaseManager:
         )
       conn.commit()
     return True
+
+  def set_channel_language(
+      self, identifier: str, output_language: Optional[str]
+  ) -> Optional[Dict[str, Any]]:
+    """Sets or clears output summary language for a channel by ID or Name."""
+    with self.get_connection() as conn:
+      ch = self.get_channel(identifier)
+      if not ch:
+        return None
+      ch_id = ch["channel_id"]
+      conn.execute(
+          "UPDATE channels SET output_language = ? WHERE channel_id = ?",
+          (output_language, ch_id),
+      )
+      conn.commit()
+      return {
+          "success": True,
+          "channel_id": ch_id,
+          "channel_name": ch.get("channel_name"),
+          "output_language": output_language,
+      }
 
   def get_channel(self, identifier: str) -> Optional[Dict[str, Any]]:
     """Retrieves a single channel by channel_id or channel_name (with normalized fallback)."""

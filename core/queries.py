@@ -27,6 +27,7 @@ class DatabaseQueries:
         channel_id          TEXT PRIMARY KEY,
         channel_name        TEXT,
         prompt_id           TEXT DEFAULT 'default',
+        output_language     TEXT,
         is_active           INTEGER DEFAULT 1,
         created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_checked_at     TIMESTAMP,
@@ -108,14 +109,15 @@ class DatabaseQueries:
   """
 
   INSERT_CHANNEL = """
-    INSERT INTO channels (channel_id, channel_name, prompt_id, is_active)
-    VALUES (?, ?, COALESCE(?, 'default'), 1)
+    INSERT INTO channels (channel_id, channel_name, prompt_id, output_language, is_active)
+    VALUES (?, ?, COALESCE(?, 'default'), ?, 1)
   """
 
   UPDATE_CHANNEL = """
     UPDATE channels 
     SET channel_name = COALESCE(?, channel_name),
         prompt_id = COALESCE(?, prompt_id),
+        output_language = COALESCE(?, output_language),
         is_active = 1
     WHERE channel_id = ?
   """
@@ -133,7 +135,7 @@ class DatabaseQueries:
   """
 
   FIND_CHANNEL_BY_AUTHOR = """
-    SELECT c.channel_id, c.channel_name, c.prompt_id, c.is_active
+    SELECT c.channel_id, c.channel_name, c.prompt_id, c.output_language, c.is_active
     FROM channels c
     JOIN channel_authors a ON c.channel_id = a.channel_id
     WHERE LOWER(a.author_name) = LOWER(?) 
@@ -166,6 +168,7 @@ class DatabaseQueries:
         c.channel_id,
         c.channel_name,
         c.prompt_id,
+        c.output_language,
         c.is_active,
         c.last_checked_at,
         a.author_name,
@@ -178,14 +181,14 @@ class DatabaseQueries:
   """
 
   GET_ACTIVE_CHANNELS = """
-    SELECT channel_id, channel_name, prompt_id 
+    SELECT channel_id, channel_name, prompt_id, output_language 
     FROM channels 
     WHERE is_active = 1 
     ORDER BY channel_id ASC
   """
 
   GET_CHANNEL = """
-    SELECT channel_id, channel_name, prompt_id, is_active
+    SELECT channel_id, channel_name, prompt_id, output_language, is_active
     FROM channels
     WHERE channel_id = ? OR channel_name = ?
     LIMIT 1

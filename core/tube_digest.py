@@ -56,12 +56,41 @@ def extract_video_id(video_input: str) -> Optional[str]:
   return None
 
 
+LANGUAGE_MAP = {
+    "it": "Italian (italiana)",
+    "en": "English",
+    "es": "Spanish (español)",
+    "fr": "French (français)",
+    "de": "German (Deutsch)",
+    "zh": "Chinese (中文)",
+    "ja": "Japanese (日本語)",
+    "hi": "Hindi",
+    "pt": "Portuguese (português)",
+    "ru": "Russian",
+    "ar": "Arabic",
+    "ko": "Korean",
+    "nl": "Dutch (Nederlands)",
+    "pl": "Polish",
+}
+
+
+def format_language_name(lang: Optional[str]) -> str:
+  """Formats an ISO language code (e.g. 'it', 'en') or language name into a descriptive string."""
+  if not lang or not isinstance(lang, str):
+    return "English"
+  code = lang.strip().lower()
+  return LANGUAGE_MAP.get(code, lang.strip())
+
+
 class TubeDigest:
   extract_video_id = staticmethod(extract_video_id)
 
   def __init__(self, config: Dict[str, Any], state_manager=None):
     """Initializes the client and configuration parameters."""
     self.state_manager = state_manager
+
+    general_cfg = config.get("general", {})
+    self.default_language = general_cfg.get("language", "en")
 
     yt_config = config.get("youtube", {})
     self.feed_url_template = yt_config.get(
@@ -478,13 +507,48 @@ class TubeDigest:
       return latest.link, latest.title, video_id, channel_title, author_info
     return None, None, None, channel_title, author_info
 
-  def get_transcript(self, video_id: str) -> Optional[str]:
-    """Downloads the video transcript using the object-based API."""
+  def get_transcript(
+      self,
+      video_id: str,
+      preferred_languages: Optional[list] = None,
+  ) -> Optional[str]:
+    """Downloads the video transcript prioritizing preferred languages, falling back to any available transcript."""
+    priority_langs = []
+    if preferred_languages:
+      for lang in preferred_languages:
+        if lang and isinstance(lang, str) and lang.strip():
+          clean_lang = lang.strip().lower()
+          if clean_lang not in priority_langs:
+            priority_langs.append(clean_lang)
+
+    if self.default_language and self.default_language.lower() not in priority_langs:
+      priority_langs.append(self.default_language.lower())
+
+    for fallback in ["en", "it", "es", "fr", "de"]:
+      if fallback not in priority_langs:
+        priority_langs.append(fallback)
+
     try:
       ytt_api = YouTubeTranscriptApi()
-      fetched_data = ytt_api.fetch(video_id, languages=["it", "en"])
+      transcript_list = ytt_api.list(video_id)
+      transcript = None
 
-      # Extract text by reading the .text attribute of each snippet
+      # 1. Try finding transcript in priority languages
+      try:
+        transcript = transcript_list.find_transcript(priority_langs)
+      except Exception:
+        pass
+
+      # 2. Fall back to the first available transcript in ANY language (manual or generated)
+      if not transcript:
+        for t in transcript_list:
+          transcript = t
+          break
+
+      if not transcript:
+        return None
+
+      fetched_data = transcript.fetch()
       full_text = " ".join([snippet.text for snippet in fetched_data])
       if fetched_data:
         try:
@@ -503,14 +567,30 @@ class TubeDigest:
       return None
 
   def summarize_transcript(
-      self, video_title: str, transcript: str, prompt_template: Optional[str] = None
+      self,
+      video_title: str,
+      transcript: str,
+      prompt_template: Optional[str] = None,
+      output_language: Optional[str] = None,
   ) -> Optional[str]:
-    """Generates a structured summary using Gemini, with prompt template from database."""
+    """Generates a structured summary using Gemini, supporting dynamic output language and prompt templates."""
+    target_lang = output_language or self.default_language or "en"
+    lang_display = format_language_name(target_lang)
+
     template = prompt_template or (
         "Summarize the following YouTube transcript for the video titled"
-        " '{video_title}'.\n\nTranscript:\n{transcript}"
+        " '{video_title}'.\n\nGenerate the summary in {output_language}.\n\nTranscript:\n{transcript}"
     )
-    prompt = template.format(video_title=video_title, transcript=transcript)
+
+    if "{output_language}" in template:
+      prompt = template.format(
+          video_title=video_title,
+          transcript=transcript,
+          output_language=lang_display,
+      )
+    else:
+      prompt = template.format(video_title=video_title, transcript=transcript)
+      prompt += f"\n\n[Important Output Requirement: Generate the entire summary strictly in {lang_display}.]"
 
     try:
       response = self.client.models.generate_content(

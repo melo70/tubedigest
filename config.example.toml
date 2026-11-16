@@ -14,6 +14,9 @@
 #
 # VARIABLES OVERVIEW:
 #
+# [general]
+#   language          : Default language for AI summaries and transcript preference (e.g. "en", "it", "es", "zh").
+#
 # [youtube]
 #   feed_url_template : Template URL for YouTube RSS feeds with {channel_id} placeholder.
 #
@@ -36,6 +39,12 @@
 #   api_key           : Google Gemini API key used to authenticate with Google GenAI.
 #   model             : Gemini model identifier (e.g. "gemini-2.5-flash", "gemini-3.6-flash").
 # ==============================================================================
+
+[general]
+# Default language for AI summaries and transcript retrieval preference.
+# Supported codes include: "en", "it", "es", "fr", "de", "zh", "hi", "ja", etc.
+# Tracked channels can override this via CLI using --lang.
+language = "en"
 
 [youtube]
 feed_url_template = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"

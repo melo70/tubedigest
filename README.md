@@ -108,6 +108,11 @@ cp config.example.toml config.toml
 Edit `config.toml` with your credentials:
 
 ```toml
+[general]
+# Global default language for AI summaries (e.g. "en", "it", "es", "fr", "de", "zh", "hi", "ja").
+# Channels can override this via CLI using --lang.
+language = "en"
+
 [youtube]
 feed_url_template = "https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 
@@ -149,12 +154,19 @@ TubeDigest automatically resolves the channel ID, fetches the official creator m
 # Add by video URL (TubeDigest automatically identifies and tracks the owner channel):
 ./tubedigest --add-channel "https://www.youtube.com/watch?v=mUw27wG7uFA"
 
-# Add by channel handle:
-./tubedigest --add-channel "@antirez"
+# Add by channel handle with specific output language (e.g., English):
+./tubedigest --add-channel "@antirez" --lang en
 
-# Add by Channel ID with a custom display name and custom prompt:
-./tubedigest --add-channel "UCBOtZaVafz_5OmUrqJAVStQ" --name "Mr. RIP" --prompt "mrrip"
+# Add by Channel ID with a custom display name, language, and custom prompt:
+./tubedigest --add-channel "UCBOtZaVafz_5OmUrqJAVStQ" --name "Mr. RIP" --lang it --prompt "mrrip"
 ```
+
+### Set / Update Channel Output Language
+You can change the summary language for any existing channel at any time:
+```bash
+./tubedigest --set-language "Mr. RIP" en
+```
+*(Accepts standard language codes such as `en`, `it`, `es`, `fr`, `de`, `zh`, `hi`, `ja`).*
 
 ### List Tracked Channels
 ```bash
