@@ -58,9 +58,20 @@ tubedigest/
 
 ## 🛠️ Prerequisites
 
-* **Python 3.11 or higher**
+* **Python 3.11 to 3.13** (see compatibility matrix below)
 * A **Google Gemini API Key** (obtainable for free at [Google AI Studio](https://aistudio.google.com/))
 * An **SMTP-enabled email account** (e.g., Gmail with an [App Password](https://myaccount.google.com/apppasswords))
+
+### 🐍 Python Version Compatibility Matrix
+
+| Python Version | Compatibility | Target Distributions & Technical Constraints |
+| :--- | :---: | :--- |
+| **Python $\le$ 3.10** | ❌ Incompatible | `google-genai` and `markdown` require `Python >= 3.11`. Installation is blocked by `pip`. |
+| **Python 3.11.x** |  Fully Supported | Default on **Debian 12 Bookworm**, **Raspberry Pi OS**, etc. Fully compliant with pre-3.12 PEP 701 syntax constraints. |
+| **Python 3.12.x** |  Fully Supported | Default on **Ubuntu 24.04 LTS**, Fedora 39/40, etc. |
+| **Python 3.13.x** |  Fully Supported | Primary development runtime. Zero warnings or deprecation notices. |
+| **Python 3.14 - 3.15** | ⚠️ Forward-Compatible | Application code is forward-compatible; depends on third-party binary wheels availability upon official releases. |
+| **Python $\ge$ 3.16** | ❌ Incompatible | Upper boundary enforced by `youtube-transcript-api` package metadata (`<3.16`). |
 
 ---
 
