@@ -9,6 +9,10 @@
 
 It continuously monitors multiple YouTube channels via RSS feeds, downloads new video transcripts, produces structured, high-quality Markdown summaries using the Google Gemini API, and dispatches formatted HTML email digests directly to your inbox. All channel subscriptions, transcripts, and summaries are persistently managed through a lightweight local **SQLite** database.
 
+<p align="center">
+  <img src="assets/demo.gif" alt="TubeDigest CLI Showcase Demo" width="900">
+</p>
+
 > [!WARNING]
 > ### ⚠️ Target Audience & Disclaimer (Read Before Using)
 > **TubeDigest is an open-source utility tailored for tech-savvy users, developers, and self-hosters ("smanettoni").**
@@ -38,6 +42,10 @@ It continuously monitors multiple YouTube channels via RSS feeds, downloads new 
 
 ```text
 tubedigest/
+├── assets/                  # Project media and animated showcase GIFs
+│   └── demo.gif
+├── docs/                    # Documentation and VHS recording scripts
+│   └── demo.tape
 ├── config.example.toml      # Configuration template with placeholder values
 ├── config.toml              # Your active configuration (ignored by Git)
 ├── tubedigest               # Executable main application entry point & CLI manager
@@ -47,8 +55,11 @@ tubedigest/
 │   └── .gitkeep
 ├── core/
 │   ├── __init__.py
+│   ├── models.py            # Domain models and VideoStatus StrEnum
+│   ├── ui.py                # ANSI terminal styling, banner, tables, and panels
 │   ├── queries.py           # Centralized DatabaseQueries SQL store
 │   ├── database.py          # SQLite DatabaseManager for channels, authors, prompts, and archives
+│   ├── i18n.py              # Internationalization and localization service (I18nManager)
 │   ├── state_manager.py     # Handles filesystem I/O and execution logs
 │   └── tube_digest.py       # Core logic: RSS parsing, Gemini client, SMTP dispatch
 └── logs/                    # Timestamped execution log files
@@ -204,6 +215,54 @@ Re-enable a previously deactivated channel for automated checks:
 ./tubedigest --delete-channel <CHANNEL_ID_OR_NAME>
 ```
 *(Also accepts `--remove-channel`. Automatically deletes the channel definition and cascades to remove all associated author profiles, archived videos, transcripts, and summaries by Channel ID or Name).*
+
+---
+
+## 📂 Video Archive & Summary Inspection (CLI)
+
+Inspect, export, and manage your archived videos, transcripts, and AI-generated summaries directly from the terminal:
+
+### List Processed Videos
+```bash
+./tubedigest --list-videos
+```
+*(Also accepts `--list-summaries`. Displays all archived videos in an aligned Unicode table with duration, status, summary indicator, and timestamps).*
+
+### Inspect Video Archive Details (Structured Inspection Table)
+Display full metadata, channel author info, transcript/summary metrics, and processing lifecycle timestamps in a clean two-column table:
+```bash
+./tubedigest --show-video-details <VIDEO_ID_OR_URL>
+# Or using shortcuts:
+./tubedigest --video-details <VIDEO_ID_OR_URL>
+./tubedigest --video-info <VIDEO_ID_OR_URL>
+```
+*(Accepts either an 11-character Video ID or any full YouTube URL).*
+
+### View AI Summary in Terminal
+Renders the complete AI Markdown summary with rich terminal formatting:
+```bash
+./tubedigest --show-summary <VIDEO_ID_OR_URL>
+```
+
+### Export AI Summary to Markdown
+```bash
+# Export to default directory (exports/<video_id>.md):
+./tubedigest --export-markdown <VIDEO_ID_OR_URL>
+
+# Export to a custom path:
+./tubedigest --export-markdown <VIDEO_ID_OR_URL> --output ./my-notes/video.md
+```
+
+### View Raw Transcript
+```bash
+./tubedigest --show-transcript <VIDEO_ID_OR_URL>
+```
+
+### Delete a Video from Archive
+Remove a specific video and its transcript/summary from the SQLite database:
+```bash
+./tubedigest --delete-video <VIDEO_ID_OR_URL>
+```
 
 ---
 
