@@ -17,20 +17,20 @@
     </style>
   </head>
   <body>
-    <h2>New video published!</h2>
+    <h2>{email_heading}</h2>
     <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
     <div class="video-box">
       <a href="{video_url}" target="_blank">
         <img src="{thumbnail_url}" alt="{subject}" class="thumbnail" />
       </a>
       <div style="margin-top: 8px; font-size: 13px; color: #555;">
-        <span><strong>Duration:</strong> {duration}</span>
+        <span><strong>{label_duration}</strong> {duration}</span>
       </div>
     </div>
     <div class="container">
       {html_body}
       <div class="footer-link">
-        <a href="{video_url}" target="_blank">Watch video on YouTube</a>
+        <a href="{video_url}" target="_blank">{label_watch}</a>
       </div>
     </div>
   </body>

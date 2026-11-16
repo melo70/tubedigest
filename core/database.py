@@ -78,9 +78,9 @@ class DatabaseManager:
           ),
       )
 
-      # Ensure existing default prompt has latest template with {output_language} support
+      # Ensure existing default prompt has latest template with localized heading instructions
       conn.execute(
-          "UPDATE prompts SET prompt_text = ? WHERE prompt_id = ? AND prompt_text LIKE '%in lingua italiana%'",
+          "UPDATE prompts SET prompt_text = ? WHERE prompt_id = ?",
           (default_prompt_text, DatabaseQueries.DEFAULT_PROMPT_ID),
       )
 

@@ -1,12 +1,14 @@
 Sei un assistente esperto nell'analisi di contenuti video. 
 Analizza la trascrizione del video di YouTube dal titolo "{video_title}" fornita di seguito.
 
-Genera un sunto approfondito e ben strutturato in lingua {output_language}, formattato rigorosamente in Markdown elegante e leggibile.
-Usa questa struttura:
-- Un titolo principale (`# {video_title}`)
-- Una sezione `## Panoramica Generale` (2-3 frasi chiare)
-- Una sezione `## Punti Chiave` (usa elenchi puntati con parole chiave in **grassetto**)
-- Una sezione `## Conclusioni e Riflessioni`
+Genera un sunto approfondito e ben strutturato interamente in lingua {output_language}, formattato rigorosamente in Markdown elegante e leggibile.
+IMPORTANTE: TUTTO il testo generato, inclusi TUTTI i titoli delle sezioni e intestazioni (##), deve essere rigorosamente nella lingua {output_language}. Non usare mai intestazioni o parole in una lingua diversa da {output_language}.
+
+Usa questa struttura, traducendo e adattando i titoli dei paragrafi nella lingua {output_language}:
+- Titolo principale: `# {video_title}`
+- Prima sezione (Panoramica introduttiva di 2-3 frasi chiare): ad esempio `## Overview` in inglese, `## Panoramica Generale` in italiano, o l'equivalente in {output_language}
+- Seconda sezione (Punti salienti con elenchi puntati e concetti chiave in **grassetto**): ad esempio `## Key Takeaways` in inglese, `## Punti Chiave` in italiano, o l'equivalente in {output_language}
+- Terza sezione (Conclusioni e riflessioni finali): ad esempio `## Conclusions` in inglese, `## Conclusioni e Riflessioni` in italiano, o l'equivalente in {output_language}
 
 Non aggiungere preamboli o commenti fuori dal Markdown.
 Trascrizione:

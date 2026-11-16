@@ -678,6 +678,7 @@ def process_single_video(
           email_template=email_template,
           channel_label=channel_label,
           duration_str=UI.format_duration(duration_seconds),
+          language=channel.get("output_language"),
       )
       if email_sent:
         db.mark_video_completed(video_id)
@@ -771,6 +772,7 @@ def process_single_video(
         email_template=email_template,
         channel_label=channel_label,
         duration_str=UI.format_duration(duration_seconds),
+        language=channel.get("output_language"),
     )
 
     if not email_sent:
@@ -894,6 +896,7 @@ def recover_pending_channel_videos(
             email_template=email_template,
             channel_label=channel_label,
             duration_str=UI.format_duration(pv.get("duration_seconds")),
+            language=channel.get("output_language"),
         )
         if email_sent:
           db.mark_video_completed(v_id)
