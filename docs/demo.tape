@@ -5,7 +5,7 @@
 Output assets/demo.gif
 
 Set FontSize 14
-Set Width 1280
+Set Width 1080
 Set Height 720
 Set Padding 20
 Set Theme "Catppuccin Mocha"
@@ -18,16 +18,7 @@ Sleep 500ms
 Enter
 Sleep 3.5s
 
-# 2. Esplorazione dell'archivio video elaborati in SQLite
-Type "clear"
-Enter
-Sleep 300ms
-Type "./tubedigest --list-videos"
-Sleep 500ms
-Enter
-Sleep 3.5s
-
-# 3. Scheda tecnica e ispezione del singolo video (nuovo layout a tabella verticale)
+# 2. Scheda tecnica e ispezione dettagliata del singolo video (layout a tabella a 2 colonne)
 Type "clear"
 Enter
 Sleep 300ms
@@ -36,11 +27,13 @@ Sleep 500ms
 Enter
 Sleep 4s
 
-# 4. Gran finale: Lettura a terminale del riassunto AI generato da Gemini
+# 3. Gran finale: Lettura del riassunto AI con pager 'less' (mostra l'header e la panoramica intatti)
 Type "clear"
 Enter
 Sleep 300ms
-Type "./tubedigest --show-summary sEpUqv_5bGY"
+Type "CLICOLOR_FORCE=1 ./tubedigest --show-summary sEpUqv_5bGY | less -R"
 Sleep 500ms
 Enter
-Sleep 5.5s
+Sleep 5s
+Type "q"
+Sleep 1.5s

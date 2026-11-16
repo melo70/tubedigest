@@ -33,6 +33,8 @@ def supports_color() -> bool:
   """Detects whether standard output supports ANSI color codes."""
   if os.environ.get("NO_COLOR"):
     return False
+  if os.environ.get("CLICOLOR_FORCE") == "1" or os.environ.get("FORCE_COLOR") == "1":
+    return True
   if not hasattr(sys.stdout, "isatty") or not sys.stdout.isatty():
     return False
   # Support Windows 10+ or standard UNIX/Linux terminals

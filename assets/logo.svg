@@ -1,33 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
     <!-- Background Gradient -->
-    <radialGradient id="bgGlow" cx="50%" cy="45%" r="65%">
-      <stop offset="0%" stop-color="#1e1e2e" />
-      <stop offset="100%" stop-color="#0f0f17" />
+    <radialGradient id="bgGlow3" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#141522" />
+      <stop offset="100%" stop-color="#090a0f" />
     </radialGradient>
 
-    <!-- Retro Tube Gradient: Cyan -> Magenta -> Coral -->
-    <linearGradient id="cyberGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#00f5d4" />
-      <stop offset="50%" stop-color="#b5179e" />
-      <stop offset="100%" stop-color="#f72585" />
+    <!-- YouTube Stream Gradient (Red/Orange) -->
+    <linearGradient id="ytGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff0033" />
+      <stop offset="100%" stop-color="#ff5500" />
     </linearGradient>
 
-    <!-- Play Button Gradient -->
-    <linearGradient id="playGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#f72585" />
-      <stop offset="100%" stop-color="#ff0055" />
+    <!-- AI Prism Gradient (Cyan/Violet) -->
+    <linearGradient id="prismGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f0ff" />
+      <stop offset="50%" stop-color="#7000ff" />
+      <stop offset="100%" stop-color="#ff0077" />
     </linearGradient>
 
-    <!-- Gemini Sparkle Gradient -->
-    <linearGradient id="sparkleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="50%" stop-color="#00f5d4" />
-      <stop offset="100%" stop-color="#7209b7" />
+    <!-- Output Digest Gradient (Cyan/Emerald) -->
+    <linearGradient id="outGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f0ff" />
+      <stop offset="100%" stop-color="#00ff88" />
     </linearGradient>
 
-    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="8" result="blur" />
+    <filter id="prismGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
       <feMerge>
         <feMergeNode in="blur" />
         <feMergeNode in="SourceGraphic" />
@@ -36,45 +35,73 @@
   </defs>
 
   <!-- Container Base -->
-  <rect width="512" height="512" rx="100" fill="url(#bgGlow)" />
-  <rect width="506" height="506" x="3" y="3" rx="97" fill="none" stroke="url(#cyberGrad)" stroke-width="3" stroke-opacity="0.4" />
+  <rect width="512" height="512" rx="100" fill="url(#bgGlow3)" />
+  <rect width="506" height="506" x="3" y="3" rx="97" fill="none" stroke="#232538" stroke-width="2" />
 
-  <!-- Outer CRT TV / Terminal Monitor Frame -->
-  <rect x="86" y="80" width="340" height="260" rx="36" fill="#181825" stroke="url(#cyberGrad)" stroke-width="6" filter="url(#neonGlow)" />
+  <!-- Flow Wave Lines Connecting Stages -->
+  <path d="M 120 230 C 180 230, 200 230, 256 230 C 312 230, 330 230, 392 230" stroke="#232538" stroke-width="4" stroke-dasharray="6,6" fill="none" />
 
-  <!-- Inner Monitor Glass Screen -->
-  <rect x="104" y="98" width="304" height="224" rx="24" fill="#11111b" stroke="#313244" stroke-width="2" />
-
-  <!-- CRT Screen Glare Arc -->
-  <path d="M 120 115 Q 256 140 380 118" stroke="#ffffff" stroke-opacity="0.08" stroke-width="4" fill="none" stroke-linecap="round" />
-
-  <!-- Left: The Video Play Symbol -->
-  <path d="M 175 160 L 245 205 L 175 250 Z" fill="url(#playGrad)" filter="url(#neonGlow)" />
-
-  <!-- Right: Dynamic Digest Lines (Synthesized Knowledge) -->
-  <line x1="270" y1="175" x2="365" y2="175" stroke="#00f5d4" stroke-width="8" stroke-linecap="round" filter="url(#neonGlow)" />
-  <line x1="270" y1="205" x2="345" y2="205" stroke="#b5179e" stroke-width="8" stroke-linecap="round" />
-  <line x1="270" y1="235" x2="320" y2="235" stroke="#f72585" stroke-width="8" stroke-linecap="round" />
-
-  <!-- Gemini AI Sparkle / Star (Top Right of Monitor) -->
-  <g transform="translate(385, 80) scale(1.1)" filter="url(#neonGlow)">
-    <path d="M 0,-32 Q 0,0 32,0 Q 0,0 0,32 Q 0,0 -32,0 Q 0,0 0,-32 Z" fill="url(#sparkleGrad)" />
+  <!-- 1. Left: Input Video Card / YouTube Plaque -->
+  <g transform="translate(100, 180)">
+    <rect x="0" y="0" width="85" height="100" rx="18" fill="#1c1d2e" stroke="url(#ytGrad)" stroke-width="3" />
+    <!-- Play Badge inside -->
+    <rect x="15" y="15" width="55" height="40" rx="10" fill="url(#ytGrad)" />
+    <path d="M 38 27 L 50 35 L 38 43 Z" fill="#ffffff" />
+    <!-- Wave subtitle track lines -->
+    <line x1="18" y1="68" x2="67" y2="68" stroke="#ff5500" stroke-width="3" stroke-linecap="round" />
+    <line x1="18" y1="78" x2="52" y2="78" stroke="#ff5500" stroke-width="3" stroke-linecap="round" stroke-opacity="0.6" />
+    <line x1="18" y1="88" x2="60" y2="88" stroke="#ff5500" stroke-width="3" stroke-linecap="round" stroke-opacity="0.3" />
   </g>
 
-  <!-- Small Auxiliary AI Sparkle -->
-  <g transform="translate(130, 285) scale(0.45)">
-    <path d="M 0,-24 Q 0,0 24,0 Q 0,0 0,24 Q 0,0 -24,0 Q 0,0 0,-24 Z" fill="#00f5d4" />
+  <!-- 2. Center: The AI Synthesis Prism (Gemini Faceted Star) -->
+  <g transform="translate(256, 230) scale(1.3)" filter="url(#prismGlow)">
+    <!-- Facet Top -->
+    <path d="M 0,-40 L 15,-10 L 0,0 L -15,-10 Z" fill="#00f0ff" fill-opacity="0.9" />
+    <!-- Facet Bottom -->
+    <path d="M 0,40 L 15,10 L 0,0 L -15,10 Z" fill="#ff0077" fill-opacity="0.9" />
+    <!-- Facet Left -->
+    <path d="M -40,0 L -10,-15 L 0,0 L -10,15 Z" fill="#7000ff" fill-opacity="0.9" />
+    <!-- Facet Right -->
+    <path d="M 40,0 L 10,-15 L 0,0 L 10,15 Z" fill="#00ff88" fill-opacity="0.9" />
+    <!-- Core Bright Dot -->
+    <circle r="4" fill="#ffffff" />
   </g>
 
-  <!-- Terminal Stand / Pedestal -->
-  <path d="M 220 340 L 205 385 L 307 385 L 292 340 Z" fill="#181825" stroke="#313244" stroke-width="2" />
-  <rect x="180" y="385" width="152" height="12" rx="6" fill="#313244" />
+  <!-- Dynamic Energy Rays Between Modules -->
+  <path d="M 188 230 L 215 230" stroke="url(#ytGrad)" stroke-width="4" stroke-linecap="round" filter="url(#prismGlow)" />
+  <path d="M 297 230 L 324 230" stroke="url(#outGrad)" stroke-width="4" stroke-linecap="round" filter="url(#prismGlow)" />
+
+  <!-- 3. Right: Output Digest Card (The Synthesized Email / Markdown) -->
+  <g transform="translate(328, 175)">
+    <rect x="0" y="0" width="90" height="110" rx="18" fill="#1c1d2e" stroke="url(#outGrad)" stroke-width="3" />
+    <!-- Card Header / Checklist -->
+    <circle cx="22" cy="24" r="6" fill="#00ff88" />
+    <path d="M 19 24 L 21 26 L 25 22" stroke="#090a0f" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="34" y="21" width="40" height="6" rx="3" fill="#ffffff" />
+    
+    <!-- Digest Content Lines -->
+    <line x1="16" y1="46" x2="74" y2="46" stroke="#00f0ff" stroke-width="4" stroke-linecap="round" />
+    <line x1="16" y1="60" x2="68" y2="60" stroke="#00f0ff" stroke-width="4" stroke-linecap="round" stroke-opacity="0.7" />
+    <line x1="16" y1="74" x2="55" y2="74" stroke="#00f0ff" stroke-width="4" stroke-linecap="round" stroke-opacity="0.4" />
+    
+    <!-- Duration Badge -->
+    <rect x="16" y="88" width="42" height="12" rx="4" fill="#00ff88" fill-opacity="0.2" />
+    <text x="37" y="97" text-anchor="middle" font-family="monospace" font-size="8" font-weight="bold" fill="#00ff88">09:55</text>
+  </g>
+
+  <!-- Satellite AI Sparkles -->
+  <g transform="translate(256, 120) scale(0.6)" filter="url(#prismGlow)">
+    <path d="M 0,-20 Q 0,0 20,0 Q 0,0 0,20 Q 0,0 -20,0 Q 0,0 0,-20 Z" fill="#00f0ff" />
+  </g>
+  <g transform="translate(390, 150) scale(0.4)">
+    <path d="M 0,-16 Q 0,0 16,0 Q 0,0 0,16 Q 0,0 -16,0 Q 0,0 0,-16 Z" fill="#00ff88" />
+  </g>
 
   <!-- Logo Typography -->
   <text x="256" y="445" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="34" letter-spacing="4" fill="#ffffff">
-    TUBE<tspan fill="#00f5d4">DIGEST</tspan>
+    TUBE<tspan fill="url(#outGrad)">DIGEST</tspan>
   </text>
-  <text x="256" y="472" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="12" letter-spacing="6" fill="#a6adc8">
-    AI MONITOR &amp; SUMMARY
+  <text x="256" y="472" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="12" letter-spacing="6" fill="#8892b0">
+    AI SYNTHESIS PIPELINE
   </text>
 </svg>

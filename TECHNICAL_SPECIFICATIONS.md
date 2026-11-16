@@ -152,7 +152,7 @@ The `UI` class centralizes all visual styling and TUI formatting:
 * **Terminal Markdown Rendering Engine (`render_markdown`)**: Parses and renders Markdown syntax (headers, bold, italic, code, bullet/numbered lists with hanging indents, and wrapped Unicode comparison tables) into rich, beautifully formatted terminal output without third-party dependencies. Features ANSI-aware full text justification (`wrap_text`, `justify_line`) that aligns paragraphs and multi-line bullet lists flush with both margins while preserving left-aligned concluding lines.
 * **Justified Email Typography**: Formats email HTML bodies with editorial full justification (`text-align: justify; text-justify: inter-word; hyphens: auto;`) across all prompt templates while keeping headings, lists, and tables cleanly left-aligned.
 * **Status Badges & Bullets**: Minimalist bullet indicators matching modern TUIs (`● Active`, `○ Disabled`, `● Yes`, `○ No`, `● COMPLETED`, `⏳ PENDING_AI`, `⏳ PEND_EMAIL`, `○ NO_SUBS`).
-* **ANSI Color Support & Safe Fallback**: Uses standard ANSI escape codes for colors, automatically disabling them when output is piped, redirected to a file, or when `NO_COLOR` is set.
+* **ANSI Color Support & Safe Fallback**: Uses standard ANSI escape codes for colors, automatically disabling them when output is piped, redirected to a file, or when `NO_COLOR` is set, with opt-in support for `CLICOLOR_FORCE=1` / `FORCE_COLOR=1` when piping to pagers (`less -R`).
 * **Clean Logging Integration**: Automatically strips all ANSI escape codes before writing output to `logs/tubedigest.log`.
 
 ---
