@@ -181,3 +181,7 @@ TubeDigest is engineered and validated for execution across modern Linux distrib
 ### 5.4. Automated Execution (Cron)
 
 The script is designed to run in headless Linux environments via `cron`, with proper working directory configuration (e.g., `cd /path/to/project && /path/to/venv/bin/python tubedigest`).
+
+### 5.5. Open-Source Licensing
+
+TubeDigest is released as free, open-source software under the terms of the **GNU General Public License v3.0** (GPLv3). See [LICENSE](LICENSE) for terms and conditions.

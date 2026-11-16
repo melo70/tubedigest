@@ -1,4 +1,5 @@
-feedparser
-markdown
-youtube-transcript-api
-google-genai
+feedparser>=6.0.10
+markdown>=3.7.0
+youtube-transcript-api>=1.0.0
+google-genai>=3.0.0
+tomli>=1.1.0;python_version<"3.11"

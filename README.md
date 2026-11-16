@@ -248,4 +248,5 @@ TubeDigest is engineered for automated, unattended operation:
 
 ## 📄 License
 
-License information will be specified soon.
+This project is licensed under the terms of the [GNU General Public License v3.0 (GPLv3)](LICENSE).
+Copyright (C) 2026 melo70.
