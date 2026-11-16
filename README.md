@@ -3,7 +3,8 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![AI Powered](https://img.shields.io/badge/AI-Google%20Gemini-orange.svg)](https://ai.google.dev/)
 [![Database](https://img.shields.io/badge/Database-SQLite3-green.svg)](https://www.sqlite.org/)
-[![Status](https://img.shields.io/badge/status-active-success.svg)]()
+[![Development Metrics](https://img.shields.io/badge/Metrics-AI%20Telemetry%20Report-purple.svg)](DEVELOPMENT_METRICS.md)
+[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 **TubeDigest** is a lightweight, headless Python automation pipeline designed to run seamlessly on Linux servers or Raspberry Pi devices. 
 
@@ -51,6 +52,7 @@ tubedigest/
 ├── tubedigest               # Executable main application entry point & CLI manager
 ├── requirements.txt         # Python package dependencies
 ├── TECHNICAL_SPECIFICATIONS.md # Detailed architecture and engineering specs
+├── DEVELOPMENT_METRICS.md   # Development effort, PM review, and AI telemetry report
 ├── data/                    # Local SQLite database directory (ignored by Git)
 │   └── .gitkeep
 ├── core/

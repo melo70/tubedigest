@@ -5,8 +5,8 @@
 Output assets/demo.gif
 
 Set FontSize 14
-Set Width 1080
-Set Height 760
+Set Width 1280
+Set Height 720
 Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set WindowBar Colorful
