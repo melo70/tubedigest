@@ -10,7 +10,7 @@ import re
 import shutil
 import sys
 import textwrap
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from core.models import VideoStatus
 
@@ -314,6 +314,84 @@ class UI:
     bot_cells = [dash * w for w in col_widths]
     lines.append(cls.gray("╰" + "┴".join(bot_cells) + "╯"))
 
+    return "\n".join(lines)
+
+  @classmethod
+  def draw_key_value_table(
+      cls,
+      title: str,
+      items: List[Tuple[str, Any]],
+      headers: Tuple[str, str] = ("Property", "Value"),
+      min_width: int = 78,
+  ) -> str:
+    """Draws a rounded-corner Unicode table with aligned key-value columns separated by a vertical bar."""
+    if not items:
+      return ""
+
+    term_cols = shutil.get_terminal_size((80, 24)).columns
+    target_width = min(max(term_cols, min_width), 110)
+
+    # Calculate key column width
+    max_key_len = max(visible_len(h) for h in [headers[0]] + [k for k, _ in items])
+    key_width = max_key_len + 2
+
+    val_width = max(target_width - 3 - key_width, 20)
+    val_content_width = val_width - 2
+    actual_width = key_width + val_width + 3
+
+    dash = "─"
+    title_vis = visible_len(title)
+    dash_count = (actual_width - 2) - title_vis - 3
+
+    lines = [
+        cls.gray("╭─ ")
+        + cls.bold(cls.cyan(title))
+        + " "
+        + cls.gray(dash * max(0, dash_count) + "╮"),
+        cls.gray("│")
+        + " "
+        + cls.bold(cls.white(headers[0]))
+        + (" " * max(0, key_width - visible_len(headers[0]) - 1))
+        + cls.gray("│")
+        + " "
+        + cls.bold(cls.white(headers[1]))
+        + (" " * max(0, val_width - visible_len(headers[1]) - 1))
+        + cls.gray("│"),
+        cls.gray("├" + (dash * key_width) + "┼" + (dash * val_width) + "┤"),
+    ]
+
+    for key, val in items:
+      raw_val = str(val) if val is not None else "-"
+      val_lines = []
+      for segment in raw_val.splitlines() or [""]:
+        if not segment.strip():
+          val_lines.append("")
+          continue
+        wrapped = cls.wrap_text(segment, width=val_content_width, justify=False)
+        val_lines.extend(wrapped or [segment])
+
+      if not val_lines:
+        val_lines = ["-"]
+
+      for i, vl in enumerate(val_lines):
+        k_text = key if i == 0 else ""
+        kp = key_width - visible_len(k_text) - 1
+        vp = val_width - visible_len(vl) - 1
+        lines.append(
+            cls.gray("│")
+            + " "
+            + k_text
+            + (" " * max(0, kp))
+            + cls.gray("│")
+            + " "
+            + vl
+            + (" " * max(0, vp))
+            + cls.gray("│")
+        )
+
+    lines.append(
+        cls.gray("╰" + (dash * key_width) + "┴" + (dash * val_width) + "╯")
+    )
     return "\n".join(lines)
 
   @classmethod

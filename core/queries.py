@@ -242,10 +242,14 @@ class DatabaseQueries:
         v.summary_markdown, 
         v.status, 
         v.email_sent_at, 
-        v.created_at
+        v.created_at,
+        c.output_language,
+        c.prompt_id,
+        p.prompt_title
     FROM processed_videos v
     LEFT JOIN channels c ON v.channel_id = c.channel_id
     LEFT JOIN channel_authors a ON v.channel_id = a.channel_id
+    LEFT JOIN prompts p ON c.prompt_id = p.prompt_id
     WHERE v.video_id = ?
     LIMIT 1
   """
