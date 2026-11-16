@@ -3,6 +3,7 @@ import re
 import smtplib
 import ssl
 import sys
+import urllib.error
 import urllib.request
 from typing import Optional, Dict, Any, Tuple
 from email.mime.multipart import MIMEMultipart
@@ -12,6 +13,17 @@ import markdown
 from youtube_transcript_api import YouTubeTranscriptApi
 from google import genai
 from core.ui import UI
+
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
+RSS_REQUEST_HEADERS = {
+    "User-Agent": BROWSER_USER_AGENT,
+    "Accept": "application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
 def parse_iso8601_duration(duration_str: str) -> Optional[int]:
@@ -60,6 +72,54 @@ class TubeDigest:
     else:
       print(f"⚠ {message}", file=sys.stderr)
 
+  def _fetch_rss_feed(
+      self, target_url: str, channel_id: str
+  ) -> Optional[Any]:
+    """Fetches and parses a YouTube RSS feed using browser headers to prevent bot/consent interception."""
+    req = urllib.request.Request(target_url, headers=RSS_REQUEST_HEADERS)
+    try:
+      with urllib.request.urlopen(req, timeout=15) as resp:
+        final_url = resp.geturl()
+        content_type = resp.headers.get("Content-Type", "")
+        data = resp.read()
+
+        # Check for Google/YouTube consent redirect
+        if "consent.youtube.com" in final_url or "consent.google.com" in final_url:
+          self._report_error(
+              f"YouTube redirected RSS request for channel '{channel_id}' to consent/verification page: {final_url}"
+          )
+          return None
+
+        # Check if HTML was returned instead of XML
+        if "text/html" in content_type.lower() and not data.lstrip().startswith(b"<?xml"):
+          html_sample = data[:300].decode("utf-8", errors="replace").strip().replace("\n", " ")
+          self._report_error(
+              f"YouTube returned HTML instead of XML for channel '{channel_id}' (Status {resp.status}). Sample: {html_sample[:120]}"
+          )
+          return None
+
+        feed = feedparser.parse(data)
+        if getattr(feed, "bozo", 0) and getattr(feed, "bozo_exception", None) and not feed.entries:
+          self._report_error(
+              f"Could not parse RSS XML for channel '{channel_id}'.",
+              exc=feed.bozo_exception,
+          )
+          return None
+
+        return feed
+    except urllib.error.HTTPError as e:
+      self._report_error(
+          f"HTTP error {e.code} ({e.reason}) while retrieving RSS feed for channel '{channel_id}'.",
+          exc=e,
+      )
+      return None
+    except Exception as e:
+      self._report_error(
+          f"Network error while retrieving RSS feed for channel '{channel_id}'.",
+          exc=e,
+      )
+      return None
+
   def fetch_channel_metadata(
       self, channel_id: str
   ) -> Optional[Dict[str, str]]:
@@ -68,40 +128,29 @@ class TubeDigest:
       return None
 
     target_url = self.feed_url_template.format(channel_id=channel_id)
-    try:
-      feed = feedparser.parse(target_url)
-      if getattr(feed, "bozo", 0) and getattr(feed, "bozo_exception", None) and not feed.entries:
-        return None
-
-      channel_title = feed.feed.get("title")
-      author_detail = feed.feed.get("author_detail", {})
-      author_name = feed.feed.get("author") or author_detail.get("name") or channel_title
-      author_url = author_detail.get("href") or f"https://www.youtube.com/channel/{channel_id}"
-
-      if not channel_title and not author_name:
-        return None
-
-      return {
-          "channel_title": channel_title,
-          "author_name": author_name,
-          "author_url": author_url,
-      }
-    except Exception as e:
-      self._report_error(
-          f"Could not retrieve channel metadata for '{channel_id}'.",
-          exc=e,
-      )
+    feed = self._fetch_rss_feed(target_url, channel_id)
+    if not feed:
       return None
+
+    channel_title = feed.feed.get("title")
+    author_detail = feed.feed.get("author_detail", {})
+    author_name = feed.feed.get("author") or author_detail.get("name") or channel_title
+    author_url = author_detail.get("href") or f"https://www.youtube.com/channel/{channel_id}"
+
+    if not channel_title and not author_name:
+      return None
+
+    return {
+        "channel_title": channel_title,
+        "author_name": author_name,
+        "author_url": author_url,
+    }
 
   def get_video_details(self, video_id: str) -> Optional[Dict[str, Any]]:
     """Retrieves metadata (channel_id, title, author_name) for a specific YouTube video."""
     video_url = f"https://www.youtube.com/watch?v={video_id}"
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
+        "User-Agent": BROWSER_USER_AGENT,
         "Accept-Language": "en-US,en;q=0.9,it;q=0.8",
     }
 
@@ -185,11 +234,7 @@ class TubeDigest:
     """Retrieves video duration in seconds via watch page player response, meta tags, or transcript timestamps."""
     video_url = f"https://www.youtube.com/watch?v={video_id}"
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
+        "User-Agent": BROWSER_USER_AGENT,
         "Accept-Language": "en-US,en;q=0.9,it;q=0.8",
     }
     try:
@@ -232,39 +277,25 @@ class TubeDigest:
       return None, None, None, None, None
 
     target_url = self.feed_url_template.format(channel_id=channel_id)
+    feed = self._fetch_rss_feed(target_url, channel_id)
+    if not feed:
+      return None, None, None, None, None
 
-    try:
-      feed = feedparser.parse(target_url)
+    channel_title = feed.feed.get("title", "YouTube")
+    author_detail = feed.feed.get("author_detail", {})
+    author_name = feed.feed.get("author") or author_detail.get("name") or channel_title
+    author_url = author_detail.get("href") or f"https://www.youtube.com/channel/{channel_id}"
+    author_info = {
+        "author_name": author_name,
+        "author_url": author_url,
+        "channel_title": channel_title,
+    }
 
-      # Catch network errors or XML parsing failures detected by feedparser
-      if getattr(feed, "bozo", 0) and getattr(feed, "bozo_exception", None) and not feed.entries:
-        self._report_error(
-            f"Could not retrieve RSS feed for channel '{channel_id}'. Check network connection or channel ID.",
-            exc=feed.bozo_exception,
-        )
-        return None, None, None, None, None
-
-      channel_title = feed.feed.get("title", "YouTube")
-      author_detail = feed.feed.get("author_detail", {})
-      author_name = feed.feed.get("author") or author_detail.get("name") or channel_title
-      author_url = author_detail.get("href") or f"https://www.youtube.com/channel/{channel_id}"
-      author_info = {
-          "author_name": author_name,
-          "author_url": author_url,
-          "channel_title": channel_title,
-      }
-
-      if feed.entries:
-        latest = feed.entries[0]
-        video_id = latest.id.split(":")[-1]
-        return latest.link, latest.title, video_id, channel_title, author_info
-      return None, None, None, channel_title, author_info
-    except Exception as e:
-      self._report_error(
-          f"Could not retrieve RSS feed for channel '{channel_id}'. Check network connection or channel ID.",
-          exc=e,
-      )
-    return None, None, None, None, None
+    if feed.entries:
+      latest = feed.entries[0]
+      video_id = latest.id.split(":")[-1]
+      return latest.link, latest.title, video_id, channel_title, author_info
+    return None, None, None, channel_title, author_info
 
   def get_transcript(self, video_id: str) -> Optional[str]:
     """Downloads the video transcript using the object-based API."""
