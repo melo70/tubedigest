@@ -39,7 +39,25 @@ def parse_iso8601_duration(duration_str: str) -> Optional[int]:
   return hours * 3600 + minutes * 60 + seconds
 
 
+def extract_video_id(video_input: str) -> Optional[str]:
+  """Extracts an 11-character YouTube video ID from a raw ID or full YouTube URL."""
+  if not video_input or not isinstance(video_input, str):
+    return None
+  val = video_input.strip()
+  if re.match(r"^[a-zA-Z0-9_-]{11}$", val):
+    return val
+  patterns = [
+      r"(?:v=|\/v\/|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})",
+  ]
+  for p in patterns:
+    m = re.search(p, val)
+    if m:
+      return m.group(1)
+  return None
+
+
 class TubeDigest:
+  extract_video_id = staticmethod(extract_video_id)
 
   def __init__(self, config: Dict[str, Any], state_manager=None):
     """Initializes the client and configuration parameters."""
@@ -178,14 +196,19 @@ class TubeDigest:
     try:
       req = urllib.request.Request(video_url, headers=headers)
       with urllib.request.urlopen(req, timeout=10) as resp:
-        html_chunk = resp.read(524288).decode("utf-8", errors="replace")
+        # Read up to 1.5MB to ensure script tags with player metadata (offset ~830KB) are covered
+        html_chunk = resp.read(1572864).decode("utf-8", errors="replace")
 
         if not channel_id:
           ch_match = re.search(r'itemprop=["\']channelId["\']\s+content=["\']([^"\']+)["\']', html_chunk)
           if not ch_match:
             ch_match = re.search(r'content=["\']([^"\']+)["\']\s+itemprop=["\']channelId["\']', html_chunk)
           if not ch_match:
-            ch_match = re.search(r'"channelId"\s*:\s*["\'](UC[a-zA-Z0-9_-]{22})["\']', html_chunk)
+            ch_match = re.search(r'["\'](?:externalChannelId|channelId)["\']\s*:\s*["\'](UC[a-zA-Z0-9_-]{22})["\']', html_chunk)
+          if not ch_match:
+            ch_match = re.search(r'["\']browseId["\']\s*:\s*["\'](UC[a-zA-Z0-9_-]{22})["\']', html_chunk)
+          if not ch_match:
+            ch_match = re.search(r'/channel/(UC[a-zA-Z0-9_-]{22})', html_chunk)
           if ch_match:
             channel_id = ch_match.group(1)
 
@@ -217,6 +240,12 @@ class TubeDigest:
     except Exception as e:
       self._report_error(f"Watch page lookup failed for video '{video_id}'.", exc=e)
 
+    # 3. If channel_id was not in watch page HTML, try resolving author_url handle if available
+    if not channel_id and author_url and ("/@" in author_url or "/c/" in author_url or "/user/" in author_url):
+      resolved_page = self._resolve_channel_from_page(author_url)
+      if resolved_page and resolved_page.get("channel_id"):
+        channel_id = resolved_page["channel_id"]
+
     if not title:
       title = f"YouTube Video ({video_id})"
 
@@ -230,6 +259,158 @@ class TubeDigest:
         "duration_seconds": duration_seconds,
     }
 
+  def _resolve_channel_from_page(self, page_url: str) -> Optional[Dict[str, str]]:
+    """Fetches a YouTube channel page (handle, custom URL, etc.) and extracts channel ID and title."""
+    headers = {
+        "User-Agent": BROWSER_USER_AGENT,
+        "Accept-Language": "en-US,en;q=0.9,it;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    try:
+      req = urllib.request.Request(page_url, headers=headers)
+      with urllib.request.urlopen(req, timeout=15) as resp:
+        final_url = resp.geturl()
+        if "consent.youtube.com" in final_url or "consent.google.com" in final_url:
+          self._report_error(f"YouTube redirected channel request to consent page: {final_url}")
+          return None
+
+        # Read enough HTML to capture embedded initial data
+        html_chunk = resp.read(1572864).decode("utf-8", errors="replace")
+
+        # 1. Search for channel ID
+        ch_id = None
+        patterns = [
+            r'itemprop=["\']channelId["\']\s+content=["\'](UC[a-zA-Z0-9_-]{22})["\']',
+            r'content=["\'](UC[a-zA-Z0-9_-]{22})["\']\s+itemprop=["\']channelId["\']',
+            r'["\'](?:externalId|channelId|browseId)["\']\s*:\s*["\'](UC[a-zA-Z0-9_-]{22})["\']',
+            r'<link\s+rel=["\']canonical["\']\s+href=["\']https://www\.youtube\.com/channel/(UC[a-zA-Z0-9_-]{22})["\']',
+            r'<meta\s+property=["\']og:url["\']\s+content=["\']https://www\.youtube\.com/channel/(UC[a-zA-Z0-9_-]{22})["\']',
+            r'/channel/(UC[a-zA-Z0-9_-]{22})',
+        ]
+        for p in patterns:
+          m = re.search(p, html_chunk)
+          if m:
+            ch_id = m.group(1)
+            break
+
+        if not ch_id:
+          return None
+
+        # 2. Search for channel title
+        ch_title = None
+        t_match = re.search(r'<meta\s+property=["\']og:title["\']\s+content=["\']([^"\']+)["\']', html_chunk)
+        if t_match:
+          ch_title = t_match.group(1)
+        else:
+          t_match = re.search(r'<title>([^<]+?)(?:\s*-\s*YouTube)?</title>', html_chunk)
+          if t_match:
+            ch_title = t_match.group(1).strip()
+
+        return {
+            "channel_id": ch_id,
+            "channel_title": ch_title,
+            "author_name": ch_title,
+            "author_url": f"https://www.youtube.com/channel/{ch_id}",
+        }
+    except Exception as e:
+      self._report_error(f"Failed to resolve channel page '{page_url}'.", exc=e)
+      return None
+
+  def resolve_channel_target(self, target: str) -> Optional[Dict[str, str]]:
+    """Resolves any YouTube target (channel ID, channel URL, handle, or video URL/ID) into channel metadata.
+
+    Accepts:
+      - Canonical Channel ID (e.g. 'UCBOtZaVafz_5OmUrqJAVStQ')
+      - Channel URL (e.g. 'https://www.youtube.com/channel/UC...' or 'https://www.youtube.com/@handle')
+      - Channel Handle (e.g. '@MrRIP' or '@antirez')
+      - Video URL or Video ID (e.g. 'https://www.youtube.com/watch?v=mUw27wG7uFA' or 'mUw27wG7uFA')
+
+    Returns:
+      A dictionary containing 'channel_id', 'channel_title', 'author_name', 'author_url', and 'resolved_from',
+      or None if resolution failed.
+    """
+    if not target or not isinstance(target, str):
+      return None
+
+    val = target.strip()
+
+    # 1. Direct canonical 24-char YouTube Channel ID (starts with UC)
+    if re.match(r"^UC[a-zA-Z0-9_-]{22}$", val):
+      meta = self.fetch_channel_metadata(val)
+      return {
+          "channel_id": val,
+          "channel_title": meta.get("channel_title") if meta else None,
+          "author_name": meta.get("author_name") if meta else None,
+          "author_url": meta.get("author_url") if meta else f"https://www.youtube.com/channel/{val}",
+          "resolved_from": "channel_id",
+      }
+
+    # 2. YouTube Channel URL containing /channel/UC...
+    ch_match = re.search(r"/channel/(UC[a-zA-Z0-9_-]{22})", val)
+    if ch_match:
+      ch_id = ch_match.group(1)
+      meta = self.fetch_channel_metadata(ch_id)
+      return {
+          "channel_id": ch_id,
+          "channel_title": meta.get("channel_title") if meta else None,
+          "author_name": meta.get("author_name") if meta else None,
+          "author_url": meta.get("author_url") if meta else f"https://www.youtube.com/channel/{ch_id}",
+          "resolved_from": "channel_url",
+      }
+
+    # 3. Video URL or 11-char Video ID
+    video_id = extract_video_id(val)
+    if video_id:
+      v_details = self.get_video_details(video_id)
+      if v_details and v_details.get("channel_id"):
+        ch_id = v_details["channel_id"]
+        meta = self.fetch_channel_metadata(ch_id)
+        ch_title = (meta.get("channel_title") if meta else None) or v_details.get("author_name")
+        a_name = (meta.get("author_name") if meta else None) or v_details.get("author_name")
+        return {
+            "channel_id": ch_id,
+            "channel_title": ch_title,
+            "author_name": a_name,
+            "author_url": (meta.get("author_url") if meta else None) or v_details.get("author_url") or f"https://www.youtube.com/channel/{ch_id}",
+            "resolved_from": "video",
+        }
+      elif v_details and v_details.get("author_url"):
+        page_res = self._resolve_channel_from_page(v_details["author_url"])
+        if page_res and page_res.get("channel_id"):
+          ch_id = page_res["channel_id"]
+          meta = self.fetch_channel_metadata(ch_id)
+          return {
+              "channel_id": ch_id,
+              "channel_title": (meta.get("channel_title") if meta else None) or page_res.get("channel_title") or v_details.get("author_name"),
+              "author_name": (meta.get("author_name") if meta else None) or page_res.get("author_name") or v_details.get("author_name"),
+              "author_url": (meta.get("author_url") if meta else None) or f"https://www.youtube.com/channel/{ch_id}",
+              "resolved_from": "video",
+          }
+
+    # 4. Handle (@...) or channel custom/vanity URL
+    if val.startswith("@"):
+      page_url = f"https://www.youtube.com/{val}"
+    elif "youtube.com/@" in val or "youtube.com/c/" in val or "youtube.com/user/" in val:
+      page_url = val if val.startswith(("http://", "https://")) else f"https://{val}"
+    elif val.startswith(("http://", "https://")):
+      page_url = val
+    else:
+      page_url = f"https://www.youtube.com/@{val}"
+
+    page_res = self._resolve_channel_from_page(page_url)
+    if page_res and page_res.get("channel_id"):
+      ch_id = page_res["channel_id"]
+      meta = self.fetch_channel_metadata(ch_id)
+      return {
+          "channel_id": ch_id,
+          "channel_title": (meta.get("channel_title") if meta else None) or page_res.get("channel_title"),
+          "author_name": (meta.get("author_name") if meta else None) or page_res.get("author_name"),
+          "author_url": (meta.get("author_url") if meta else None) or f"https://www.youtube.com/channel/{ch_id}",
+          "resolved_from": "handle" if ("@" in page_url) else "channel_url",
+      }
+
+    return None
+
   def get_video_duration(self, video_id: str) -> Optional[int]:
     """Retrieves video duration in seconds via watch page player response, meta tags, or transcript timestamps."""
     video_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -240,7 +421,7 @@ class TubeDigest:
     try:
       req = urllib.request.Request(video_url, headers=headers)
       with urllib.request.urlopen(req, timeout=10) as resp:
-        html_chunk = resp.read(524288).decode("utf-8", errors="replace")
+        html_chunk = resp.read(1572864).decode("utf-8", errors="replace")
 
         m_len = re.search(r'["\']lengthSeconds["\']\s*:\s*["\']?(\d+)["\']?', html_chunk)
         if m_len:

@@ -137,8 +137,23 @@ model = "gemini-2.5-flash"
 Manage your monitored channels and prompt templates directly from the command line:
 
 ### Add a Channel
+You can add a channel by passing any of the following to `--add-channel`:
+- **Canonical Channel ID**: e.g., `UCBOtZaVafz_5OmUrqJAVStQ`
+- **Channel URL**: e.g., `https://www.youtube.com/channel/UCBOtZaVafz_5OmUrqJAVStQ` or `https://www.youtube.com/@MrRIP`
+- **Channel Handle**: e.g., `@MrRIP`, `@antirez`, `@IBMTechnology`
+- **Any Video URL or Video ID from the channel**: e.g., `https://www.youtube.com/watch?v=mUw27wG7uFA&t=5s`, `https://youtu.be/mUw27wG7uFA`, or `mUw27wG7uFA`
+
+TubeDigest automatically resolves the channel ID, fetches the official creator metadata and channel name, and registers it into SQLite without requiring manual lookup or a YouTube Data API key!
+
 ```bash
-./tubedigest --add-channel <CHANNEL_ID> [--name "Channel Name"] [--prompt <PROMPT_ID>]
+# Add by video URL (TubeDigest automatically identifies and tracks the owner channel):
+./tubedigest --add-channel "https://www.youtube.com/watch?v=mUw27wG7uFA"
+
+# Add by channel handle:
+./tubedigest --add-channel "@antirez"
+
+# Add by Channel ID with a custom display name and custom prompt:
+./tubedigest --add-channel "UCBOtZaVafz_5OmUrqJAVStQ" --name "Mr. RIP" --prompt "mrrip"
 ```
 
 ### List Tracked Channels

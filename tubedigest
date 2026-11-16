@@ -17,7 +17,8 @@ Usage:
       ./tubedigest --add-video <VIDEO_ID_OR_URL>
 
     - Channel management via CLI:
-      ./tubedigest --add-channel <CHANNEL_ID> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
+      ./tubedigest --add-channel <TARGET> [--name <CHANNEL_NAME>] [--prompt <PROMPT_ID>]
+      (TARGET accepts Channel ID, URL, @handle, or any Video URL/ID from that channel)
       ./tubedigest --disable-channel <CHANNEL_ID_OR_NAME>
       ./tubedigest --enable-channel <CHANNEL_ID_OR_NAME>
       ./tubedigest --delete-channel <CHANNEL_ID_OR_NAME>
@@ -62,7 +63,7 @@ except ImportError:
   import tomli as tomllib
 
 from core.state_manager import StateManager
-from core.tube_digest import TubeDigest
+from core.tube_digest import TubeDigest, extract_video_id
 from core.database import DatabaseManager
 from core.ui import UI
 from core.models import VideoStatus
@@ -120,23 +121,6 @@ def load_config() -> dict:
     return tomllib.load(f)
 
 
-def extract_video_id(video_input: str) -> Optional[str]:
-  """Extracts an 11-character YouTube video ID from a raw ID or full YouTube URL."""
-  if not video_input:
-    return None
-  val = video_input.strip()
-  if re.match(r"^[a-zA-Z0-9_-]{11}$", val):
-    return val
-  patterns = [
-      r"(?:v=|\/v\/|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})",
-  ]
-  for p in patterns:
-    m = re.search(p, val)
-    if m:
-      return m.group(1)
-  return None
-
-
 def handle_cli_channels(
     args,
     db: DatabaseManager,
@@ -189,22 +173,33 @@ def handle_cli_channels(
     return True
 
   if args.add_channel:
-    channel_id = args.add_channel
+    raw_target = args.add_channel.strip()
     channel_name = args.name
     prompt_id = args.prompt or "default"
 
-    # Automatically fetch channel and author metadata from YouTube RSS if available
-    metadata = digest.fetch_channel_metadata(channel_id) if digest else None
-    author_name = None
-    author_url = None
-    channel_title = None
+    state_manager.log_message(f"Resolving YouTube channel for '{raw_target}'...")
+    resolved = digest.resolve_channel_target(raw_target) if digest else None
 
-    if metadata:
-      channel_title = metadata.get("channel_title")
-      author_name = metadata.get("author_name")
-      author_url = metadata.get("author_url")
-      if not channel_name and channel_title:
-        channel_name = channel_title
+    if not resolved or not resolved.get("channel_id"):
+      state_manager.log_error(
+          f"Could not resolve a valid YouTube channel from '{raw_target}'.\n"
+          "Please provide one of the following:\n"
+          "  • Channel ID (e.g. UCBOtZaVafz_5OmUrqJAVStQ)\n"
+          "  • Channel URL (e.g. https://www.youtube.com/@MrRIP or /channel/UC...)\n"
+          "  • Channel Handle (e.g. @MrRIP or @antirez)\n"
+          "  • Any Video URL or Video ID from the channel (e.g. https://www.youtube.com/watch?v=mUw27wG7uFA)"
+      )
+      return True
+
+    channel_id = resolved["channel_id"]
+    channel_title = resolved.get("channel_title")
+    author_name = resolved.get("author_name")
+    author_url = resolved.get("author_url")
+
+    if not channel_name and channel_title:
+      channel_name = channel_title
+    elif not channel_name and author_name:
+      channel_name = author_name
 
     db.add_channel(
         channel_id=channel_id,
@@ -217,8 +212,10 @@ def handle_cli_channels(
     name_display = f" '{channel_name}'" if channel_name else ""
     author_display = f" by '{author_name}'" if author_name else ""
     prompt_display = f" using prompt '{prompt_id}'"
+    resolved_from = resolved.get("resolved_from")
+    resolved_display = f" [resolved from {resolved_from}]" if resolved_from and resolved_from != "channel_id" else ""
     state_manager.log_message(
-        UI.success(f"Channel{name_display} ({UI.cyan(channel_id)}) added/updated successfully{author_display}{prompt_display}.")
+        UI.success(f"Channel{name_display} ({UI.cyan(channel_id)}) added/updated successfully{author_display}{prompt_display}{resolved_display}.")
     )
     return True
 
@@ -278,7 +275,7 @@ def handle_cli_channels(
     channels = db.list_channels()
     if not channels:
       state_manager.print_screen(UI.warning("No channels found in database."))
-      state_manager.print_screen(UI.tip("Add a channel: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]"))
+      state_manager.print_screen(UI.tip("Add a channel: ./tubedigest --add-channel <TARGET> [--name <NAME>]"))
       return True
 
     headers = ["Status", "Channel ID", "Channel Name", "Author / Creator", "Prompt ID"]
@@ -296,7 +293,7 @@ def handle_cli_channels(
         UI.banner(),
         table,
         f"  {UI.bold('Total:')} {len(channels)} channel(s)\n",
-        UI.tip("Add channel: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]\n"),
+        UI.tip("Add channel: ./tubedigest --add-channel <TARGET> [--name <NAME>]\n"),
     ]
     state_manager.print_screen("\n".join(footer))
     return True
@@ -330,7 +327,7 @@ def handle_cli_channels(
       state_manager.log_error(
           f"Video '{v_title}' ({video_id}) belongs to {author_desc}, which is not present in your tracked channels list."
       )
-      state_manager.print_screen(UI.tip(f"Add this channel first using: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]"))
+      state_manager.print_screen(UI.tip(f"Add this channel first using: ./tubedigest --add-channel {video_id} [--name <NAME>]"))
       return True
 
     ch_label = channel.get("channel_name") or channel["channel_id"]
@@ -905,7 +902,7 @@ def run_pipeline(
     active_channels = db.get_active_channels()
     if not active_channels:
       state_manager.log_message("No active channels configured in SQLite database.")
-      state_manager.log_message("Add a channel using: ./tubedigest --add-channel <CHANNEL_ID> [--name <NAME>]")
+      state_manager.log_message("Add a channel using: ./tubedigest --add-channel <TARGET> [--name <NAME>]")
       return
     state_manager.log_message(f"Starting check for {len(active_channels)} active channel(s)...")
 
@@ -953,8 +950,11 @@ def main():
   )
   parser.add_argument(
       "--add-channel",
-      metavar="CHANNEL_ID",
-      help="Add or update a YouTube Channel ID to monitor in SQLite.",
+      metavar="TARGET",
+      help=(
+          "Add or update a channel to monitor in SQLite. Accepts a Channel ID (UC...), "
+          "Channel URL, handle (@name), or any YouTube video URL/ID from that channel."
+      ),
   )
   parser.add_argument(
       "--name",
