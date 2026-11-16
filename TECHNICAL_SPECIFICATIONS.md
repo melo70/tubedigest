@@ -38,6 +38,7 @@ The project is structured with an internal `core/` package divided into the foll
 │   ├── ui.py                # UI styling, ASCII art banner, Unicode box-drawing, and ANSI color support
 │   ├── queries.py           # DatabaseQueries class (centralized SQL store)
 │   ├── database.py          # DatabaseManager module (SQLite channels, authors, prompts, and archive)
+│   ├── i18n.py              # Internationalization module (I18nManager, Locale, and EmailLocalization)
 │   ├── state_manager.py     # StateManager module (filesystem I/O and logging)
 │   └── tube_digest.py       # TubeDigest module (RSS, Gemini API, SMTP email)
 └── /logs                    # Output directory for execution logs
@@ -152,6 +153,23 @@ The `UI` class centralizes all visual styling and TUI formatting:
 * **Status Badges & Bullets**: Minimalist bullet indicators matching modern TUIs (`● Active`, `○ Disabled`, `● Yes`, `○ No`, `● COMPLETED`, `⏳ PENDING_AI`, `⏳ PEND_EMAIL`, `○ NO_SUBS`).
 * **ANSI Color Support & Safe Fallback**: Uses standard ANSI escape codes for colors, automatically disabling them when output is piped, redirected to a file, or when `NO_COLOR` is set.
 * **Clean Logging Integration**: Automatically strips all ANSI escape codes before writing output to `logs/tubedigest.log`.
+
+---
+
+### 4.7. Internationalization & Localization (`core/i18n.py`)
+
+The internationalization architecture follows strict Object-Oriented and DDD (Domain-Driven Design) principles, avoiding loose global dictionaries:
+
+* **`EmailLocalization` (`@dataclass(frozen=True)`)**: Immutable value object defining localized email UI elements (`heading`, `duration_label`, `watch_action`).
+* **`Locale` (`@dataclass(frozen=True)`)**: Immutable value object encapsulating language metadata: ISO language code (`code`), human-readable display name (`display_name`), and email localization model (`email`).
+* **`I18nManager`**: Centralized localization registry and service providing:
+  * `DEFAULT_LANGUAGE`: Default fallback locale (`"en"`).
+  * `_LOCALES`: Type-safe registry supporting 14 languages (`it`, `en`, `es`, `fr`, `de`, `zh`, `ja`, `hi`, `pt`, `ru`, `ar`, `ko`, `nl`, `pl`).
+  * `get_locale(lang_code)`: Resolves a code to a `Locale` object, safely falling back to the default locale.
+  * `get_display_name(lang_code)`: Returns descriptive language names (e.g., `"Italian (italiana)"`, `"Japanese (日本語)"`) for dynamic prompt injection.
+  * `get_mandatory_instruction(lang_code)`: Generates strict LLM system prompts enforcing section header translation (`##`) matching the target output language.
+  * `localize_email(template, target_lang)`: Pure method replacing dynamic template placeholders (`{email_heading}`, `{label_duration}`, `{label_watch}`) and adapting legacy static HTML templates without altering external files.
+  * `list_supported_languages()`: Returns supported locale codes for validation.
 
 ---
 

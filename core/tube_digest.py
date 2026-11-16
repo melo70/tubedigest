@@ -13,6 +13,7 @@ import markdown
 from youtube_transcript_api import YouTubeTranscriptApi
 from google import genai
 from core.ui import UI
+from core.i18n import I18nManager
 
 BROWSER_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -54,66 +55,6 @@ def extract_video_id(video_input: str) -> Optional[str]:
     if m:
       return m.group(1)
   return None
-
-
-LANGUAGE_MAP = {
-    "it": "Italian (italiana)",
-    "en": "English",
-    "es": "Spanish (español)",
-    "fr": "French (français)",
-    "de": "German (Deutsch)",
-    "zh": "Chinese (中文)",
-    "ja": "Japanese (日本語)",
-    "hi": "Hindi",
-    "pt": "Portuguese (português)",
-    "ru": "Russian",
-    "ar": "Arabic",
-    "ko": "Korean",
-    "nl": "Dutch (Nederlands)",
-    "pl": "Polish",
-}
-
-
-def format_language_name(lang: Optional[str]) -> str:
-  """Formats an ISO language code (e.g. 'it', 'en') or language name into a descriptive string."""
-  if not lang or not isinstance(lang, str):
-    return "English"
-  code = lang.strip().lower()
-  return LANGUAGE_MAP.get(code, lang.strip())
-
-
-EMAIL_I18N = {
-    "it": {
-        "heading": "Nuovo video pubblicato!",
-        "duration": "Durata:",
-        "watch": "Guarda il video su YouTube",
-    },
-    "en": {
-        "heading": "New video published!",
-        "duration": "Duration:",
-        "watch": "Watch video on YouTube",
-    },
-    "es": {
-        "heading": "¡Nuevo video publicado!",
-        "duration": "Duración:",
-        "watch": "Ver video en YouTube",
-    },
-    "fr": {
-        "heading": "Nouvelle vidéo publiée !",
-        "duration": "Durée :",
-        "watch": "Regarder la vidéo sur YouTube",
-    },
-    "de": {
-        "heading": "Neues Video veröffentlicht!",
-        "duration": "Dauer:",
-        "watch": "Video auf YouTube ansehen",
-    },
-    "zh": {
-        "heading": "新视频已发布！",
-        "duration": "时长：",
-        "watch": "在 YouTube 上观看视频",
-    },
-}
 
 
 class TubeDigest:
@@ -608,8 +549,8 @@ class TubeDigest:
       output_language: Optional[str] = None,
   ) -> Optional[str]:
     """Generates a structured summary using Gemini, supporting dynamic output language and prompt templates."""
-    target_lang = output_language or self.default_language or "en"
-    lang_display = format_language_name(target_lang)
+    target_lang = output_language or self.default_language or I18nManager.DEFAULT_LANGUAGE
+    lang_display = I18nManager.get_display_name(target_lang)
 
     template = prompt_template or (
         "Summarize the following YouTube transcript for the video titled"
@@ -626,11 +567,7 @@ class TubeDigest:
       prompt = template.format(video_title=video_title, transcript=transcript)
 
     # Always enforce strict language requirement for section headings and content
-    prompt += (
-        f"\n\n[MANDATORY LANGUAGE INSTRUCTION: The ENTIRE summary, including ALL section headings (##), "
-        f"bullet points, and conclusions, must be written strictly in {lang_display}. "
-        f"Do not output headings in Italian or any other language unless the target language is Italian.]"
-    )
+    prompt += f"\n\n{I18nManager.get_mandatory_instruction(target_lang)}"
 
     try:
       response = self.client.models.generate_content(
@@ -671,15 +608,12 @@ class TubeDigest:
       thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
       duration_display = duration_str or "-"
 
-      target_lang = (language or self.default_language or "en").lower().strip()
-      i18n = EMAIL_I18N.get(target_lang, EMAIL_I18N.get("en", EMAIL_I18N["it"]))
+      target_lang = language or self.default_language or I18nManager.DEFAULT_LANGUAGE
+      email_template_str = I18nManager.localize_email(template, target_lang)
 
       # Clean token substitution that never collides with CSS braces
       email_html = (
-          template.replace("{email_heading}", i18n["heading"])
-          .replace("{label_duration}", i18n["duration"])
-          .replace("{label_watch}", i18n["watch"])
-          .replace("{subject}", subject)
+          email_template_str.replace("{subject}", subject)
           .replace("{video_url}", video_url)
           .replace("{thumbnail_url}", thumbnail_url)
           .replace("{html_body}", html_body)
@@ -687,13 +621,6 @@ class TubeDigest:
           .replace("{duration}", duration_display)
           .replace("{video_duration}", duration_display)
       )
-
-      # Also replace legacy literal boilerplates from existing database templates
-      for other_code, other_strings in EMAIL_I18N.items():
-        if other_code != target_lang:
-          email_html = email_html.replace(f"<h2>{other_strings['heading']}</h2>", f"<h2>{i18n['heading']}</h2>")
-          email_html = email_html.replace(f"<strong>{other_strings['duration']}</strong>", f"<strong>{i18n['duration']}</strong>")
-          email_html = email_html.replace(f">{other_strings['watch']}</a>", f">{i18n['watch']}</a>")
 
       msg = MIMEMultipart("alternative")
       msg["Subject"] = subject
