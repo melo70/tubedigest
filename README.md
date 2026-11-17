@@ -358,6 +358,16 @@ TubeDigest was engineered using a high-discipline **Human-in-the-Loop / AI-Augme
 
 ---
 
+## 🙏 Special Thanks & Acknowledgments
+
+A heartfelt and profound thank you goes to **Salvatore Sanfilippo** (creator of Redis, alias [**antirez**](https://antirez.com/latest/0)).
+
+Through his extraordinary open-source contributions, insightful writing, and masterclass programming videos, Salvatore has been an immense source of inspiration, continuous learning, and technical growth. The passion, craftsmanship, and intellectual curiosity he constantly shares with the developer community have deeply shaped my approach to software development and problem solving.
+
+*Grazie di cuore, Salvatore!*
+
+---
+
 ## 📄 License
 
 This project is licensed under the terms of the [GNU General Public License v3.0 (GPLv3)](LICENSE).
