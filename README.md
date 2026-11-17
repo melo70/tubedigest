@@ -339,6 +339,18 @@ TubeDigest is engineered for automated, unattended operation:
 
 ---
 
+## 💡 Engineering Philosophy: Beyond "Vibe Coding"
+
+TubeDigest was engineered using a high-discipline **Human-in-the-Loop / AI-Augmented Software Engineering** methodology rather than unguided "vibe coding":
+* **Active Rejection of Shortcuts**: Strict enforcement of OOP design patterns, immutable domain value objects (`Locale`, `EmailLocalization`), and dedicated service registries (`I18nManager`) over temporary global dictionary hacks.
+* **Separation of Concerns (SoC)**: Presentation (CLI and box-drawing TUI in `core/ui.py`), domain logic (`core/tube_digest.py`), SQL repository (`core/queries.py`), and persistence (`core/database.py`) remain completely decoupled.
+* **Design Review Loop**: Every architectural shift, database migration, and CLI command underwent deliberate human review and technical evaluation prior to implementation.
+* **Real-World Portability**: Engineered and validated for headless Linux environments, ensuring Python 3.11 AST compliance (Raspberry Pi OS / Debian Bookworm) and POSIX terminal standards (`CLICOLOR_FORCE`).
+
+📊 **For the complete empirical development metrics, token telemetry, and project leadership review, see [DEVELOPMENT_METRICS.md](DEVELOPMENT_METRICS.md).**
+
+---
+
 ## 🔒 Security Best Practices
 
 * **Never commit `config.toml` or `*.db`**: The included `.gitignore` protects your private API keys, email credentials, and local database.

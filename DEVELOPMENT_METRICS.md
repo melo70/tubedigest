@@ -45,6 +45,39 @@ A software product is only as good as the product vision and architectural guard
 
 > *"The quality of an AI-assisted codebase is directly proportional to the standards enforced by the human engineer directing it. Strict rejection of shortcuts transformed TubeDigest from a disposable script into a maintainable, extensible software pipeline."*
 
+### 🔬 The Methodology: Disciplined Engineering vs. "Vibe Coding"
+
+In contemporary AI development, the term **"Vibe Coding"** (popularized by Andrej Karpathy) describes an undisciplined workflow where developers abandon architectural control, ignore code diffs, avoid design patterns, and accept superficial functionality without understanding the underlying implementation:
+> *"You entirely give in to the vibes, embrace impatience, and forget that the code even exists. You talk to the LLM, run the app, see if it breaks, don't read the code or the diff, and just iterate on vibes until it works."*
+
+While "vibe coding" may suffice for throwaway hacks, it predictably yields unmaintainable monoliths, tight coupling, and fragile edge-case behavior.
+
+**The development of TubeDigest represents the deliberate antithesis of "vibe coding".** It was conducted under a high-discipline **Human-in-the-Loop Agentic Engineering** paradigm defined by five non-negotiable principles:
+
+1. **Active Rejection of "Vibe Shortcuts"**:
+   When the AI assistant introduced temporary global dictionaries (`LANGUAGE_MAP`, `EMAIL_I18N`) to quickly resolve language strings, the human Project Manager immediately vetoed the shortcut:
+   > *"Do not take shortcuts; always adhere strictly to OOP best practices, using classes, typed models, and clean abstractions."*
+   This decisive intervention prevented architectural decay and led to the creation of `core/i18n.py`, featuring immutable value objects (`Locale`, `EmailLocalization`) and a centralized `I18nManager` service registry.
+
+2. **Mandatory Preliminary Design Review**:
+   The human lead instituted a mandatory governance rule across all iterations:
+   > *"Always provide your technical opinion and architectural proposal on my ideas first, and wait for my explicit confirmation before executing."*
+   This established a continuous review loop (Human-in-the-Loop), eliminating AI hallucination, preventing premature code churn, and ensuring every CLI command and database migration was vetted prior to implementation.
+
+3. **Strict Separation of Concerns (SoC) & OOP Design**:
+   The human director ensured that code was properly partitioned across specialized domain layers:
+   * **Presentation Layer**: CLI routing in `tubedigest`, TUI box-drawing and Markdown formatting in `core/ui.py`.
+   * **Domain & Business Logic**: YouTube RSS ingestion, Gemini client orchestration, and SMTP delivery in `core/tube_digest.py`.
+   * **SQL Repository**: Pure DDL/DML isolation in `core/queries.py` (`DatabaseQueries`).
+   * **Persistence & Transactions**: SQLite foreign key cascading and schema migrations in `core/database.py`.
+   * **State & Reliability**: Exception hooks and banner rotation in `core/state_manager.py`.
+
+4. **Targeted Platform Portability & AST Verification**:
+   Rather than assuming "it works on my machine", the human director enforced compatibility constraints for headless edge devices (Debian 12 Bookworm, Raspberry Pi OS). Code was verified for Python 3.11 AST compliance (avoiding pre-3.12 PEP 701 backslash escapes in f-string expressions) and adhered to POSIX terminal standards (such as `CLICOLOR_FORCE` / `FORCE_COLOR` handling when piping into pagers).
+
+5. **Exhaustive Documentation & Reproducibility**:
+   Instead of undocumented "vibes", the project produced formal specifications (`TECHNICAL_SPECIFICATIONS.md`), full telemetry reports (`DEVELOPMENT_METRICS.md`), and automated reproducible terminal recording tapes (`docs/demo.tape` via VHS).
+
 ---
 
 ## 3. 🤖 AI Pair-Programming Telemetry (Antigravity Assistant)
