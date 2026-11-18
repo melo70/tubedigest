@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 import textwrap
+import unicodedata
 from typing import Any, List, Optional, Tuple
 
 from core.models import VideoStatus
@@ -24,9 +25,24 @@ def strip_ansi(text: str) -> str:
   return ANSI_REGEX.sub("", text)
 
 
+def char_cell_width(c: str) -> int:
+  """Calculates the display width in terminal cells of a single character."""
+  code = ord(c)
+  # Variation selectors (U+FE0E, U+FE0F) and zero-width combining characters occupy 0 terminal cells
+  if code in (0xFE0E, 0xFE0F) or unicodedata.combining(c):
+    return 0
+  # East Asian Wide (W) and Fullwidth (F) characters (such as emojis) occupy 2 terminal cells
+  if unicodedata.east_asian_width(c) in ("W", "F"):
+    return 2
+  return 1
+
+
 def visible_len(text: str) -> int:
-  """Calculates visible character width in terminal, ignoring ANSI color escapes."""
-  return len(strip_ansi(text))
+  """Calculates visible character width in terminal cells, ignoring ANSI color escapes."""
+  if not text:
+    return 0
+  clean = strip_ansi(text)
+  return sum(char_cell_width(c) for c in clean)
 
 
 def supports_color() -> bool:
